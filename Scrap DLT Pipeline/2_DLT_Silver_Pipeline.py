@@ -1,15 +1,15 @@
 # Databricks notebook source
 # MAGIC %md
 # MAGIC # DLT Pipeline - Silver Layer Transformations
-# MAGIC 
+# MAGIC
 # MAGIC This notebook defines Delta Live Tables (DLT) pipeline for Silver layer transformations.
-# MAGIC 
+# MAGIC
 # MAGIC **Transformations:**
 # MAGIC - Data quality validation and cleansing
 # MAGIC - Standardized data types
 # MAGIC - Denormalized dimension lookups
 # MAGIC - Business rule enforcement
-# MAGIC 
+# MAGIC
 # MAGIC **Source:** `welch.scrap_demo.*_bronze`  
 # MAGIC **Target:** `welch.scrap_demo.*_silver`
 
