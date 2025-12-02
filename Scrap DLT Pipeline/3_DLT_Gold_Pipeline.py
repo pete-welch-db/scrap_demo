@@ -1,15 +1,15 @@
 # Databricks notebook source
 # MAGIC %md
 # MAGIC # DLT Pipeline - Gold Layer Aggregations
-# MAGIC 
+# MAGIC
 # MAGIC This notebook defines Delta Live Tables (DLT) pipeline for Gold layer aggregations.
-# MAGIC 
+# MAGIC
 # MAGIC **Aggregations:**
 # MAGIC - Scrap summary by time period
 # MAGIC - Scrap by plant/supplier/defect
 # MAGIC - ML feature tables for forecasting
 # MAGIC - 8D analytics
-# MAGIC 
+# MAGIC
 # MAGIC **Source:** `welch.scrap_demo.*_silver`  
 # MAGIC **Target:** `welch.scrap_demo.*_gold`
 
