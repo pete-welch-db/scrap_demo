@@ -145,7 +145,7 @@ def load_plant_monthly_data() -> Optional[pd.DataFrame]:
         shift_2_ratio,
         shift_3_ratio
     FROM {SCHEMA}.plant_monthly_scenario_gold
-    ORDER BY plant_name_lookup, year, month
+    ORDER BY plant, year, month
     """
     return run_query(query)
 
@@ -242,7 +242,7 @@ def get_plants_list() -> list:
     query = f"""
     SELECT DISTINCT plant_name_lookup as plant
     FROM {SCHEMA}.plant_monthly_scenario_gold
-    ORDER BY plant_name_lookup
+    ORDER BY plant
     """
     result = run_query(query)
     if result is not None:
@@ -256,7 +256,7 @@ def get_work_center_types() -> list:
     query = f"""
     SELECT DISTINCT work_center_type_lookup as work_center_type
     FROM {SCHEMA}.scrap_by_work_center_gold
-    ORDER BY work_center_type_lookup
+    ORDER BY work_center_type
     """
     result = run_query(query)
     if result is not None:

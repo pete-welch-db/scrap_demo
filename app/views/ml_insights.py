@@ -31,10 +31,9 @@ def load_forecast_results() -> Optional[pd.DataFrame]:
     query = f"""
     SELECT 
         forecast_date,
-        predicted_value as predicted_cost,
+        predicted_cost,
         lower_bound,
-        upper_bound,
-        entity_name
+        upper_bound
     FROM {SCHEMA}.ml_total_forecast_results
     ORDER BY forecast_date
     """
@@ -49,11 +48,11 @@ def load_plant_forecasts() -> Optional[pd.DataFrame]:
         entity_id as plant_id,
         entity_name as plant,
         forecast_date,
-        predicted_value as predicted_cost,
+        predicted_cost,
         lower_bound,
         upper_bound
     FROM {SCHEMA}.ml_plant_forecast_results
-    ORDER BY entity_name, forecast_date
+    ORDER BY plant, forecast_date
     """
     return run_query(query)
 
@@ -66,11 +65,11 @@ def load_supplier_forecasts() -> Optional[pd.DataFrame]:
         entity_id as supplier_id,
         entity_name as supplier,
         forecast_date,
-        predicted_value as predicted_cost,
+        predicted_cost,
         lower_bound,
         upper_bound
     FROM {SCHEMA}.ml_supplier_forecast_results
-    ORDER BY entity_name, forecast_date
+    ORDER BY supplier, forecast_date
     """
     return run_query(query)
 
@@ -83,9 +82,8 @@ def load_root_cause_validation() -> Optional[pd.DataFrame]:
         plant_id,
         analysis_date,
         defect_category,
-        actual_root_cause,
         predicted_root_cause,
-        prediction_correct,
+        prediction_matches as prediction_correct,
         prediction_confidence,
         total_scrap_cost,
         quantity_scrapped
@@ -94,7 +92,8 @@ def load_root_cause_validation() -> Optional[pd.DataFrame]:
     """
     df = run_query(query)
     if df is not None and len(df) > 0:
-        # Compute derived columns
+        # Compute derived columns - actual_root_cause derived from defect_category for display
+        df['actual_root_cause'] = df['defect_category']
         df['disagreement_flag'] = ~df['prediction_correct']
         df['high_confidence_disagreement'] = df['disagreement_flag'] & (df['prediction_confidence'] > 0.85)
     return df
@@ -106,19 +105,26 @@ def load_anomalies() -> Optional[pd.DataFrame]:
     query = f"""
     SELECT 
         detection_date as transaction_date,
-        entity_name as plant,
         daily_cost as total_scrap_cost,
         daily_qty as quantity_scrapped,
         daily_records,
         anomaly_score,
-        is_anomaly,
-        anomaly_type as anomaly_reason
+        is_anomaly
     FROM {SCHEMA}.ml_scrap_anomalies
     WHERE is_anomaly = true
     ORDER BY detection_date DESC
     LIMIT 100
     """
-    return run_query(query)
+    df = run_query(query)
+    if df is not None and len(df) > 0:
+        # Add derived columns for display
+        if 'plant' not in df.columns:
+            df['plant'] = 'All Plants'
+        if 'defect_category' not in df.columns:
+            df['defect_category'] = 'Various'
+        if 'anomaly_reason' not in df.columns:
+            df['anomaly_reason'] = 'Unusual scrap pattern detected'
+    return df
 
 
 @st.cache_data(ttl=app_config.cache_ttl)
@@ -178,17 +184,17 @@ def load_reallocation_recommendations() -> Optional[pd.DataFrame]:
     """Load supplier reallocation recommendations."""
     query = f"""
     SELECT 
-        part_category as category,
+        category,
         best_supplier,
         best_quality as best_supplier_quality,
         worst_supplier,
         worst_quality as worst_supplier_quality,
         recommended_shift_pct,
-        potential_scrap_reduction as estimated_scrap_reduction,
-        potential_savings as estimated_savings,
+        estimated_scrap_savings as estimated_scrap_reduction,
+        estimated_scrap_savings as estimated_savings,
         best_available_capacity
     FROM {SCHEMA}.ml_supplier_reallocation_recommendations
-    ORDER BY potential_savings DESC
+    ORDER BY estimated_scrap_savings DESC
     """
     return run_query(query)
 
@@ -531,6 +537,9 @@ def render_ml_insights_page():
             data_source = "🟡 Demo Data"
         
         st.caption(data_source)
+        
+        # Ensure forecast_date is datetime
+        forecast_df['forecast_date'] = pd.to_datetime(forecast_df['forecast_date'])
         
         # Forecast chart
         st.plotly_chart(plot_forecast(forecast_df), use_container_width=True)

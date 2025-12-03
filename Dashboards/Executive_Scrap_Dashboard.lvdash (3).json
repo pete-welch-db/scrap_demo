@@ -1004,7 +1004,7 @@
                     },
                     {
                       "name": "avg_scrap_cost",
-                      "expression": "AVG(`total_scrap_cost`)"
+                      "expression": "`total_scrap_cost`"
                     }
                   ],
                   "disaggregated": true
