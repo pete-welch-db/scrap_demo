@@ -32,7 +32,7 @@ def render_sidebar() -> str:
         # Navigation
         page = st.radio(
             "Navigation",
-            ["📊 Executive Dashboard", "🎯 What-If Scenarios", "🤖 AI Assistant"],
+            ["📊 Executive Dashboard", "🎯 What-If Scenarios", "🤖 ML Insights", "💬 AI Assistant"],
             label_visibility="collapsed"
         )
         

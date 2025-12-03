@@ -1,6 +1,6 @@
 # Scrap Reduction Intelligence App
 
-A modern, dark-mode Streamlit application for scrap data analysis, what-if scenarios, and AI-powered insights.
+A modern, dark-mode Streamlit application for scrap data analysis, what-if scenarios, ML insights, and AI-powered analytics.
 
 ## 📁 Project Structure
 
@@ -12,7 +12,9 @@ app/
 ├── app.yaml              # Databricks Apps deployment config
 ├── .env                  # Environment variables (not in git)
 ├── .env.example          # Example environment file
-├── .gitignore            # Git ignore rules
+│
+├── assets/               # Static assets
+│   └── Databricks_Logo.png
 │
 ├── components/           # Reusable UI components
 │   ├── __init__.py
@@ -20,16 +22,18 @@ app/
 │   ├── sidebar.py        # Sidebar navigation
 │   └── metrics.py        # Metric cards & chart themes
 │
-├── pages/                # Application pages
+├── views/                # Application pages
 │   ├── __init__.py
 │   ├── dashboard.py      # Executive Dashboard
 │   ├── scenarios.py      # What-If Scenarios
-│   └── assistant.py      # AI Assistant
+│   ├── ml_insights.py    # ML Model Results
+│   └── assistant.py      # AI Assistant (Genie)
 │
 ├── data/                 # Data layer
 │   ├── __init__.py
 │   ├── connection.py     # Database connection
 │   ├── queries.py        # SQL queries
+│   ├── genie_client.py   # Databricks Genie API client
 │   └── mock_data.py      # Mock data fallback
 │
 └── .streamlit/
@@ -42,18 +46,28 @@ app/
 - Embedded Databricks AI/BI dashboard via iframe
 - Real-time KPI cards with Databricks branding
 - Adjustable dashboard height
+- Direct link to full Databricks dashboard
 
 ### 🎯 What-If Scenarios
 Interactive scenario planning for scrap reduction:
 - **By Plant**: Simulate plant-level improvement initiatives
 - **By Work Center**: Model equipment upgrades and OEE improvements  
 - **By Part**: Analyze part-specific defect reduction strategies
+- **By Supplier**: Evaluate supplier reallocation opportunities
 
-### 🤖 AI Assistant
-Placeholder for AI integrations:
-- **Databricks Genie**: Natural language queries over scrap data
-- **Multi-Agent System**: Complex analysis orchestration
-- **8D Knowledge Base**: RAG over historical 8D reports
+### 🤖 ML Insights
+Visualize results from Databricks ML models:
+- **Forecasting**: 3-month scrap cost predictions (Prophet)
+- **Root Cause Validation**: ML vs Quality team comparison
+- **Anomaly Detection**: Unusual scrap patterns (Isolation Forest)
+- **Supplier Risk**: Multi-factor risk scoring
+- **Recommendations**: ML-powered supplier reallocation suggestions
+
+### 💬 AI Assistant
+Databricks Genie integration:
+- Natural language queries over scrap data
+- SQL query generation and execution
+- Link to full Genie Space in Databricks
 
 ## Quick Start
 

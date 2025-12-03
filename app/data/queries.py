@@ -286,3 +286,59 @@ def get_supplier_alternatives(category: str, exclude_supplier_id: str) -> Option
     """
     return run_query(query)
 
+
+# =============================================================================
+# ML Model Result Queries
+# =============================================================================
+
+@st.cache_data(ttl=app_config.cache_ttl)
+def load_forecast_summary() -> Optional[pd.DataFrame]:
+    """Load forecast summary metrics."""
+    query = f"""
+    SELECT 
+        MIN(ds) as forecast_start,
+        MAX(ds) as forecast_end,
+        SUM(yhat) as total_predicted_cost,
+        AVG(yhat) as avg_daily_cost,
+        COUNT(*) as forecast_days
+    FROM {SCHEMA}.ml_total_forecast_results
+    WHERE ds > CURRENT_DATE()
+    """
+    return run_query(query)
+
+
+@st.cache_data(ttl=app_config.cache_ttl)
+def load_model_accuracy_metrics() -> Optional[pd.DataFrame]:
+    """Load ML model accuracy metrics from validation results."""
+    query = f"""
+    SELECT 
+        COUNT(*) as total_records,
+        SUM(CASE WHEN prediction_correct THEN 1 ELSE 0 END) as correct_predictions,
+        ROUND(AVG(CASE WHEN prediction_correct THEN 1.0 ELSE 0.0 END) * 100, 2) as accuracy_pct,
+        SUM(CASE WHEN high_confidence_disagreement THEN 1 ELSE 0 END) as high_conf_disagreements,
+        SUM(CASE WHEN high_confidence_disagreement THEN total_scrap_cost ELSE 0 END) as cost_at_risk
+    FROM {SCHEMA}.ml_root_cause_validation
+    """
+    return run_query(query)
+
+
+@st.cache_data(ttl=app_config.cache_ttl)
+def load_recent_anomalies(days: int = 30) -> Optional[pd.DataFrame]:
+    """Load recent anomalies from ML detection."""
+    query = f"""
+    SELECT 
+        transaction_date,
+        plant_name_lookup as plant,
+        defect_category,
+        total_scrap_cost,
+        quantity_scrapped,
+        anomaly_score,
+        anomaly_reason
+    FROM {SCHEMA}.ml_scrap_anomalies
+    WHERE is_anomaly = true
+      AND transaction_date >= DATE_ADD(CURRENT_DATE(), -{days})
+    ORDER BY transaction_date DESC
+    LIMIT 50
+    """
+    return run_query(query)
+

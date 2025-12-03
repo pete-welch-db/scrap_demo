@@ -1390,20 +1390,20 @@ if len(recommendations_df) > 0:
 # COMMAND ----------
 
 # Get supplier-part relationships from scrap data
+# Note: part_category is available via part_category_lookup in scrap_transactions_silver
 supplier_part_matrix = spark.sql(f"""
     SELECT 
-        s.supplier_id,
-        s.supplier_name_lookup as supplier_name,
-        s.supplier_tier_lookup as tier,
-        p.part_category,
-        COUNT(DISTINCT p.part_id) as parts_count,
-        SUM(s.total_scrap_cost) as total_scrap_cost,
-        AVG(s.supplier_quality_score) as avg_quality
-    FROM {FULL_SCHEMA}.scrap_transactions_silver s
-    JOIN {FULL_SCHEMA}.parts_silver p ON s.part_id = p.part_id
-    GROUP BY s.supplier_id, s.supplier_name_lookup, s.supplier_tier_lookup, p.part_category
-    HAVING parts_count >= 2
-    ORDER BY part_category, total_scrap_cost DESC
+        supplier_id,
+        supplier_name_lookup as supplier_name,
+        supplier_tier_lookup as tier,
+        part_category_lookup as part_category,
+        COUNT(DISTINCT part_id) as parts_count,
+        SUM(total_scrap_cost) as total_scrap_cost,
+        AVG(supplier_quality_score) as avg_quality
+    FROM {FULL_SCHEMA}.scrap_transactions_silver
+    GROUP BY supplier_id, supplier_name_lookup, supplier_tier_lookup, part_category_lookup
+    HAVING COUNT(DISTINCT part_id) >= 2
+    ORDER BY part_category_lookup, total_scrap_cost DESC
 """)
 
 # Save matrix

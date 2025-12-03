@@ -1680,17 +1680,17 @@
     {
       "name": "filter_plants",
       "displayName": "Filter - Plants",
-      "query": "SELECT DISTINCT plant_name_lookup as plant FROM welch.scrap_demo.scrap_by_plant_gold ORDER BY plant_name_lookup"
+      "query": "SELECT DISTINCT plant_name_lookup as plant FROM welch.scrap_demo.scrap_by_plant_gold ORDER BY 1"
     },
     {
       "name": "filter_suppliers",
       "displayName": "Filter - Suppliers", 
-      "query": "SELECT DISTINCT supplier_name_lookup as supplier FROM welch.scrap_demo.scrap_by_supplier_gold ORDER BY supplier_name_lookup"
+      "query": "SELECT DISTINCT supplier_name_lookup as supplier FROM welch.scrap_demo.scrap_by_supplier_gold ORDER BY 1"
     },
     {
       "name": "filter_years",
       "displayName": "Filter - Years",
-      "query": "SELECT DISTINCT transaction_year as year FROM welch.scrap_demo.scrap_monthly_summary_gold ORDER BY transaction_year DESC"
+      "query": "SELECT DISTINCT transaction_year as year FROM welch.scrap_demo.scrap_monthly_summary_gold ORDER BY 1 DESC"
     },
     {
       "name": "filter_defect_categories",
@@ -1715,7 +1715,7 @@
     {
       "name": "monthly_trend",
       "displayName": "Monthly Scrap Trend",
-      "query": "SELECT year_month, transaction_year as year, total_scrap_cost, total_quantity_scrapped FROM welch.scrap_demo.scrap_monthly_summary_gold ORDER BY transaction_year, transaction_month"
+      "query": "SELECT year_month, transaction_year as year, total_scrap_cost, total_quantity_scrapped FROM welch.scrap_demo.scrap_monthly_summary_gold ORDER BY 1"
     },
     {
       "name": "plant_ytd_summary",
@@ -1745,12 +1745,12 @@
     {
       "name": "forecast_vs_actual",
       "displayName": "Forecast vs Actual",
-      "query": "SELECT year_month, total_scrap_cost as actual_scrap_cost FROM welch.scrap_demo.scrap_monthly_summary_gold ORDER BY transaction_year DESC, transaction_month DESC LIMIT 12"
+      "query": "SELECT year_month, total_scrap_cost as actual_scrap_cost FROM welch.scrap_demo.scrap_monthly_summary_gold ORDER BY 1 DESC LIMIT 12"
     },
     {
       "name": "plant_forecast",
       "displayName": "Plant Forecast",
-      "query": "SELECT year_month, plant_name_lookup as plant, SUM(total_scrap_cost) as total_scrap_cost FROM welch.scrap_demo.scrap_by_plant_gold GROUP BY year_month, plant_name_lookup ORDER BY year_month"
+      "query": "SELECT year_month, plant_name_lookup as plant, SUM(total_scrap_cost) as total_scrap_cost FROM welch.scrap_demo.scrap_by_plant_gold GROUP BY year_month, plant_name_lookup ORDER BY 1"
     },
     {
       "name": "supplier_forecast",
@@ -1800,7 +1800,7 @@
     {
       "name": "supplier_monthly_trend",
       "displayName": "Supplier Monthly Trend",
-      "query": "SELECT year_month, supplier_name_lookup as supplier, SUM(total_scrap_cost) as total_scrap_cost FROM welch.scrap_demo.scrap_by_supplier_gold WHERE supplier_name_lookup IN (SELECT supplier_name_lookup FROM welch.scrap_demo.scrap_by_supplier_gold GROUP BY supplier_name_lookup ORDER BY SUM(total_scrap_cost) DESC LIMIT 5) GROUP BY year_month, supplier_name_lookup ORDER BY year_month"
+      "query": "SELECT year_month, supplier_name_lookup as supplier, SUM(total_scrap_cost) as total_scrap_cost FROM welch.scrap_demo.scrap_by_supplier_gold WHERE supplier_name_lookup IN (SELECT supplier_name_lookup FROM welch.scrap_demo.scrap_by_supplier_gold GROUP BY supplier_name_lookup ORDER BY SUM(total_scrap_cost) DESC LIMIT 5) GROUP BY year_month, supplier_name_lookup ORDER BY 1"
     },
     {
       "name": "plant_performance",
@@ -1830,7 +1830,7 @@
     {
       "name": "plant_monthly",
       "displayName": "Plant Monthly",
-      "query": "SELECT year_month, plant_name_lookup as plant, SUM(total_scrap_cost) as total_scrap_cost FROM welch.scrap_demo.scrap_by_plant_gold GROUP BY year_month, plant_name_lookup ORDER BY year_month"
+      "query": "SELECT year_month, plant_name_lookup as plant, SUM(total_scrap_cost) as total_scrap_cost FROM welch.scrap_demo.scrap_by_plant_gold GROUP BY year_month, plant_name_lookup ORDER BY 1"
     },
     {
       "name": "eight_d_summary",
