@@ -20,9 +20,9 @@
                 "query": {
                   "datasetName": "ytd_kpis",
                   "fields": [
-                    {"name": "ytd_scrap_cost", "expression": "SUM(`total_scrap_cost`)"}
+                    {"name": "ytd_scrap_cost", "expression": "`total_scrap_cost`"}
                   ],
-                  "disaggregated": false
+                  "disaggregated": true
                 }
               }
             ],
@@ -49,9 +49,9 @@
                 "query": {
                   "datasetName": "ytd_kpis",
                   "fields": [
-                    {"name": "ytd_qty", "expression": "SUM(`total_qty_scrapped`)"}
+                    {"name": "ytd_qty", "expression": "`total_qty_scrapped`"}
                   ],
-                  "disaggregated": false
+                  "disaggregated": true
                 }
               }
             ],
@@ -107,9 +107,9 @@
                 "query": {
                   "datasetName": "supplier_quality_avg",
                   "fields": [
-                    {"name": "avg_quality", "expression": "ROUND(AVG(`supplier_quality_score`) * 100, 1)"}
+                    {"name": "avg_quality", "expression": "`avg_quality`"}
                   ],
-                  "disaggregated": false
+                  "disaggregated": true
                 }
               }
             ],
@@ -229,8 +229,8 @@
                 "query": {
                   "datasetName": "shift_breakdown",
                   "fields": [
-                    {"name": "shift", "expression": "CONCAT('Shift ', `shift`)"},
-                    {"name": "qty_scrapped", "expression": "SUM(`quantity_scrapped`)"}
+                    {"name": "shift", "expression": "`shift`"},
+                    {"name": "qty_scrapped", "expression": "`quantity_scrapped`"}
                   ],
                   "disaggregated": true
                 }
@@ -550,9 +550,9 @@
                   "fields": [
                     {"name": "supplier_name", "expression": "`supplier_name_lookup`"},
                     {"name": "tier", "expression": "`supplier_tier_lookup`"},
-                    {"name": "quality_score", "expression": "ROUND(AVG(`supplier_quality_score`) * 100, 1)"},
-                    {"name": "scrap_cost", "expression": "SUM(`total_scrap_cost`)"},
-                    {"name": "parts_affected", "expression": "COUNT(DISTINCT `part_id`)"}
+                    {"name": "quality_score", "expression": "`supplier_quality_score`"},
+                    {"name": "scrap_cost", "expression": "`total_scrap_cost`"},
+                    {"name": "parts_affected", "expression": "`parts_affected`"}
                   ],
                   "disaggregated": true
                 }
@@ -899,9 +899,9 @@
                 "query": {
                   "datasetName": "eight_d_timing",
                   "fields": [
-                    {"name": "avg_days", "expression": "ROUND(AVG(`days_open`), 1)"}
+                    {"name": "avg_days", "expression": "`avg_days`"}
                   ],
-                  "disaggregated": false
+                  "disaggregated": true
                 }
               }
             ],
@@ -928,9 +928,9 @@
                 "query": {
                   "datasetName": "eight_d_overdue",
                   "fields": [
-                    {"name": "overdue", "expression": "SUM(CASE WHEN `is_overdue` = true THEN 1 ELSE 0 END)"}
+                    {"name": "overdue", "expression": "`overdue_count`"}
                   ],
-                  "disaggregated": false
+                  "disaggregated": true
                 }
               }
             ],
@@ -989,8 +989,7 @@
                   "datasetName": "eight_d_severity",
                   "fields": [
                     {"name": "severity", "expression": "`severity`"},
-                    {"name": "count", "expression": "COUNT(*)"},
-                    {"name": "scrap_cost", "expression": "SUM(`total_scrap_cost`)"}
+                    {"name": "scrap_cost", "expression": "`total_scrap_cost`"}
                   ],
                   "disaggregated": true
                 }
@@ -1000,7 +999,7 @@
               "version": 3,
               "widgetType": "pie",
               "encodings": {
-                "angle": {"fieldName": "count", "displayName": "Count"},
+                "angle": {"fieldName": "scrap_cost", "displayName": "Scrap Cost"},
                 "color": {"fieldName": "severity", "displayName": "Severity"}
               },
               "frame": {
@@ -1020,8 +1019,7 @@
                 "query": {
                   "datasetName": "eight_d_effectiveness",
                   "fields": [
-                    {"name": "verification_result", "expression": "`verification_result`"},
-                    {"name": "count", "expression": "COUNT(*)"}
+                    {"name": "verification_result", "expression": "`verification_result`"}
                   ],
                   "disaggregated": true
                 }
@@ -1031,7 +1029,7 @@
               "version": 3,
               "widgetType": "pie",
               "encodings": {
-                "angle": {"fieldName": "count", "displayName": "Count"},
+                "angle": {"fieldName": "verification_result", "displayName": "Count"},
                 "color": {"fieldName": "verification_result", "displayName": "Result"}
               },
               "frame": {
@@ -1304,7 +1302,7 @@
     {
       "name": "ytd_kpis",
       "displayName": "YTD KPIs",
-      "query": "SELECT SUM(total_scrap_cost) as total_scrap_cost, SUM(total_quantity_scrapped) as total_qty_scrapped FROM welch.scrap_demo.kpi_dashboard_gold WHERE year = YEAR(CURRENT_DATE())"
+      "query": "SELECT SUM(total_scrap_cost) as total_scrap_cost, SUM(total_qty_scrapped) as total_qty_scrapped FROM welch.scrap_demo.kpi_dashboard_gold WHERE year = YEAR(CURRENT_DATE())"
     },
     {
       "name": "eight_d_status",
@@ -1314,7 +1312,7 @@
     {
       "name": "supplier_quality_avg",
       "displayName": "Supplier Quality Average",
-      "query": "SELECT AVG(supplier_quality_score) as supplier_quality_score FROM welch.scrap_demo.scrap_transactions_silver WHERE transaction_year = YEAR(CURRENT_DATE())"
+      "query": "SELECT ROUND(AVG(supplier_quality_score) * 100, 1) as avg_quality FROM welch.scrap_demo.scrap_transactions_silver WHERE transaction_year = YEAR(CURRENT_DATE())"
     },
     {
       "name": "monthly_trend",
@@ -1449,12 +1447,12 @@
     {
       "name": "eight_d_timing",
       "displayName": "8D Timing",
-      "query": "SELECT days_open FROM welch.scrap_demo.eight_d_reports_silver WHERE status = 'Closed' AND YEAR(date_opened) = YEAR(CURRENT_DATE())"
+      "query": "SELECT ROUND(AVG(days_open), 1) as avg_days FROM welch.scrap_demo.eight_d_reports_silver WHERE status = 'Closed' AND YEAR(date_opened) = YEAR(CURRENT_DATE())"
     },
     {
       "name": "eight_d_overdue",
       "displayName": "8D Overdue",
-      "query": "SELECT is_overdue FROM welch.scrap_demo.eight_d_reports_silver WHERE YEAR(date_opened) = YEAR(CURRENT_DATE())"
+      "query": "SELECT SUM(CASE WHEN is_overdue = true THEN 1 ELSE 0 END) as overdue_count FROM welch.scrap_demo.eight_d_reports_silver WHERE YEAR(date_opened) = YEAR(CURRENT_DATE())"
     },
     {
       "name": "root_cause_breakdown",

@@ -41,7 +41,7 @@
 
 # COMMAND ----------
 
-# MAGIC %pip install prophet mlflow
+# MAGIC %pip install prophet mlflow[databricks]
 
 
 # COMMAND ----------

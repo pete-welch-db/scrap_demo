@@ -26,7 +26,7 @@
 
 # COMMAND ----------
 
-# MAGIC %pip install scikit-learn mlflow
+# MAGIC %pip install scikit-learn mlflow[databricks]
 
 # COMMAND ----------
 
