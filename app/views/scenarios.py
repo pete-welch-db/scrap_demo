@@ -44,64 +44,129 @@ def get_scenario_data():
     Returns:
         Tuple of (monthly_df, parts_df, wc_df, plants, work_centers, is_live)
     """
-    # Try loading live data
-    monthly_df = load_plant_monthly_data()
-    parts_df = load_part_scrap_data()
-    wc_df = load_work_center_data()
-    plants_list = get_plants_list()
-    wc_types = get_work_center_types()
+    from config import app_config
     
-    # Check if we got live data
-    if monthly_df is not None and len(monthly_df) > 0:
-        # Transform to expected format
-        monthly_df = monthly_df.rename(columns={'scrap_cost': 'scrap_cost'})
-        monthly_df['month'] = pd.to_datetime(monthly_df['month_date'])
+    # Check if we should use mock data only
+    if app_config.data_source == "mock":
+        return _generate_mock_scenario_data()
+    
+    try:
+        # Try loading live data
+        monthly_df = load_plant_monthly_data()
+        parts_df = load_part_scrap_data()
+        wc_df = load_work_center_data()
+        plants_list = get_plants_list()
+        wc_types = get_work_center_types()
         
-        plants = plants_list if plants_list else monthly_df['plant'].unique().tolist()
-        work_centers = wc_types if wc_types else wc_df['work_center_type'].unique().tolist() if wc_df is not None else []
-        
-        # Transform parts data
-        if parts_df is not None:
-            parts_df = parts_df.rename(columns={
-                'monthly_scrap_cost': 'monthly_scrap_cost',
-                'defect_rate': 'defect_rate', 
-                'unit_cost': 'unit_cost'
-            })
-        
-        # Transform work center data  
-        if wc_df is not None and len(wc_df) > 0:
-            # Use work_center_type for grouping (different work center types)
-            group_cols = []
-            if 'work_center_type' in wc_df.columns:
-                group_cols.append('work_center_type')
-            if 'plant' in wc_df.columns:
-                group_cols.append('plant')
+        # Check if we got live data
+        if monthly_df is not None and len(monthly_df) > 0:
+            # Transform to expected format
+            if 'month_date' in monthly_df.columns:
+                monthly_df['month'] = pd.to_datetime(monthly_df['month_date'])
+            elif 'month' not in monthly_df.columns:
+                monthly_df['month'] = pd.Timestamp.now()
             
-            if group_cols:
-                agg_dict = {}
-                if 'monthly_scrap_cost' in wc_df.columns:
-                    agg_dict['monthly_scrap_cost'] = 'mean'
-                if 'oee' in wc_df.columns:
-                    agg_dict['oee'] = 'mean'
-                if 'avg_equipment_age' in wc_df.columns:
-                    agg_dict['avg_equipment_age'] = 'mean'
+            plants = plants_list if plants_list else monthly_df['plant'].unique().tolist()
+            work_centers = wc_types if wc_types else []
+            if not work_centers and wc_df is not None and 'work_center_type' in wc_df.columns:
+                work_centers = wc_df['work_center_type'].unique().tolist()
+            
+            # Transform parts data - ensure required columns exist
+            if parts_df is None or len(parts_df) == 0:
+                # Generate mock parts data
+                parts_df = _generate_mock_parts_data()
+            else:
+                # Add missing columns if not present
+                if 'supplier_name' not in parts_df.columns:
+                    parts_df['supplier_name'] = 'Unknown Supplier'
+                if 'part_category' not in parts_df.columns:
+                    parts_df['part_category'] = 'General'
+            
+            # Transform work center data  
+            if wc_df is None or len(wc_df) == 0:
+                wc_df = _generate_mock_wc_data()
+            else:
+                # Use work_center_type for grouping (different work center types)
+                group_cols = []
+                if 'work_center_type' in wc_df.columns:
+                    group_cols.append('work_center_type')
+                if 'plant' in wc_df.columns:
+                    group_cols.append('plant')
                 
-                if agg_dict:
-                    wc_df = wc_df.groupby(group_cols).agg(agg_dict).reset_index()
+                if group_cols:
+                    agg_dict = {}
+                    if 'monthly_scrap_cost' in wc_df.columns:
+                        agg_dict['monthly_scrap_cost'] = 'mean'
+                    if 'oee' in wc_df.columns:
+                        agg_dict['oee'] = 'mean'
+                    if 'avg_equipment_age' in wc_df.columns:
+                        agg_dict['avg_equipment_age'] = 'mean'
                     
-            # Rename columns to expected names
-            rename_map = {}
-            if 'work_center_type' in wc_df.columns:
-                rename_map['work_center_type'] = 'work_center'
-            if 'avg_equipment_age' in wc_df.columns:
-                rename_map['avg_equipment_age'] = 'equipment_age'
-            if rename_map:
-                wc_df = wc_df.rename(columns=rename_map)
-        
-        return monthly_df, parts_df, wc_df, plants, work_centers, True
+                    if agg_dict:
+                        wc_df = wc_df.groupby(group_cols).agg(agg_dict).reset_index()
+                        
+                # Rename columns to expected names
+                rename_map = {}
+                if 'work_center_type' in wc_df.columns:
+                    rename_map['work_center_type'] = 'work_center'
+                if 'avg_equipment_age' in wc_df.columns:
+                    rename_map['avg_equipment_age'] = 'equipment_age'
+                if rename_map:
+                    wc_df = wc_df.rename(columns=rename_map)
+            
+            return monthly_df, parts_df, wc_df, plants, work_centers, True
+            
+    except Exception as e:
+        # Silently fall back to mock data (error will show as Demo Data indicator)
+        pass
     
     # Fall back to mock data
     return _generate_mock_scenario_data()
+
+
+def _generate_mock_parts_data():
+    """Generate mock parts data only."""
+    np.random.seed(42)
+    parts = [f"PRT-{str(i).zfill(5)}" for i in range(1, 51)]
+    part_names = [f"Component {chr(65 + i % 26)}-{i}" for i in range(50)]
+    supplier_names = [
+        "Precision Metal Works", "Global Plastics Inc", "AutoParts Direct",
+        "Quality Components Ltd", "Premium Electronics", "CNC Masters",
+        "Midwest Stamping", "Southern Castings", "Atlantic Assembly"
+    ]
+    parts_data = []
+    for i, (part, name) in enumerate(zip(parts, part_names)):
+        supplier = supplier_names[i % len(supplier_names)]
+        parts_data.append({
+            'part_id': part,
+            'part_name': name,
+            'monthly_scrap_cost': np.random.uniform(5000, 50000),
+            'defect_rate': np.random.uniform(0.01, 0.08),
+            'unit_cost': np.random.uniform(10, 200),
+            'supplier_name': supplier,
+            'part_category': ['Stamping', 'Injection Molding', 'Machining', 'Electronics', 'Casting'][i % 5]
+        })
+    return pd.DataFrame(parts_data)
+
+
+def _generate_mock_wc_data():
+    """Generate mock work center data only."""
+    np.random.seed(42)
+    plants = ["Detroit Assembly", "Louisville Stamping", "San Antonio Body", 
+              "Oakville Paint", "Saltillo Powertrain", "Silao Components"]
+    work_centers = ["Stamping Press", "Welding Cell", "CNC Machining", 
+                    "Injection Molding", "Assembly Line", "Paint Booth"]
+    wc_data = []
+    for wc in work_centers:
+        for plant in plants:
+            wc_data.append({
+                'work_center': wc,
+                'plant': plant,
+                'monthly_scrap_cost': np.random.uniform(10000, 80000),
+                'oee': np.random.uniform(0.65, 0.95),
+                'equipment_age': np.random.randint(2, 18)
+            })
+    return pd.DataFrame(wc_data)
 
 
 def _generate_mock_scenario_data():
@@ -143,15 +208,23 @@ def _generate_mock_scenario_data():
             })
     monthly_df = pd.DataFrame(monthly_data)
     
-    # Parts data
+    # Parts data with supplier info
+    supplier_names = [
+        "Precision Metal Works", "Global Plastics Inc", "AutoParts Direct",
+        "Quality Components Ltd", "Premium Electronics", "CNC Masters",
+        "Midwest Stamping", "Southern Castings", "Atlantic Assembly"
+    ]
     parts_data = []
-    for part, name in zip(parts, part_names):
+    for i, (part, name) in enumerate(zip(parts, part_names)):
+        supplier = supplier_names[i % len(supplier_names)]
         parts_data.append({
             'part_id': part,
             'part_name': name,
             'monthly_scrap_cost': np.random.uniform(5000, 50000),
             'defect_rate': np.random.uniform(0.01, 0.08),
-            'unit_cost': np.random.uniform(10, 200)
+            'unit_cost': np.random.uniform(10, 200),
+            'supplier_name': supplier,
+            'part_category': ['Stamping', 'Injection Molding', 'Machining', 'Electronics', 'Casting'][i % 5]
         })
     parts_df = pd.DataFrame(parts_data)
     
@@ -858,9 +931,28 @@ def get_work_center_recommendations(work_center: str, avg_oee: float, avg_age: f
     return recommendations[:6]
 
 
-def get_part_recommendations(num_parts: int, total_cost: float, avg_defect_rate: float, reduction_target: int) -> list:
-    """Generate context-aware recommendations for part scenario."""
+def get_part_recommendations(num_parts: int, total_cost: float, avg_defect_rate: float, 
+                              reduction_target: int, supplier_info: dict = None, 
+                              alt_suppliers: list = None) -> list:
+    """Generate context-aware recommendations for part scenario with re-sourcing options."""
     recommendations = []
+    
+    # Re-sourcing recommendation if supplier has quality issues
+    if supplier_info and supplier_info.get('quality_score', 1.0) < 0.85:
+        recommendations.append({
+            "icon": "🔄",
+            "title": "Re-Source Part",
+            "desc": f"Supplier quality {supplier_info.get('quality_score', 0)*100:.0f}% - evaluate alternate sources",
+            "priority": "high"
+        })
+        if alt_suppliers and len(alt_suppliers) > 0:
+            best_alt = alt_suppliers[0]
+            recommendations.append({
+                "icon": "🏆",
+                "title": f"Alternate: {best_alt.get('name', 'N/A')[:25]}",
+                "desc": f"Quality: {best_alt.get('quality_score', 0)*100:.0f}% | Capacity: {best_alt.get('available_capacity', 0)*100:.0f}% avail",
+                "priority": "high"
+            })
     
     if avg_defect_rate > 0.05:
         recommendations.append({
@@ -891,6 +983,23 @@ def get_part_recommendations(num_parts: int, total_cost: float, avg_defect_rate:
             "desc": f"${total_cost/1000:.0f}K/month - executive sponsorship recommended",
             "priority": "high"
         })
+    
+    # Supplier-specific recommendations
+    if supplier_info:
+        if supplier_info.get('on_time_delivery', 1.0) < 0.90:
+            recommendations.append({
+                "icon": "⏰",
+                "title": "Delivery Issues",
+                "desc": f"On-time {supplier_info.get('on_time_delivery', 0)*100:.0f}% - consider dual-sourcing",
+                "priority": "medium"
+            })
+        if supplier_info.get('capacity_util', 0) > 0.90:
+            recommendations.append({
+                "icon": "⚠️",
+                "title": "Capacity Constrained",
+                "desc": f"{supplier_info.get('capacity_util', 0)*100:.0f}% utilized - qualify backup supplier",
+                "priority": "medium"
+            })
     
     if reduction_target >= 50:
         recommendations.append({
@@ -929,6 +1038,45 @@ def get_part_recommendations(num_parts: int, total_cost: float, avg_defect_rate:
     })
     
     return recommendations[:6]
+
+
+def get_mock_part_supplier_info(supplier_name: str) -> dict:
+    """Get mock supplier info for a part."""
+    import random
+    random.seed(hash(supplier_name) % 1000)
+    
+    tiers = ["Tier 1", "Tier 2", "Tier 3"]
+    regions = ["North America", "Mexico", "Canada", "EMEA", "APAC"]
+    categories = ["Stamping", "Plastic Injection", "Electronics", "Machining", "Casting"]
+    
+    return {
+        'name': supplier_name,
+        'tier': random.choice(tiers),
+        'category': random.choice(categories),
+        'region': random.choice(regions),
+        'quality_score': random.uniform(0.70, 0.98),
+        'on_time_delivery': random.uniform(0.75, 0.98),
+        'capacity_util': random.uniform(0.60, 0.95),
+        'risk_score': random.randint(20, 80)
+    }
+
+
+def get_mock_alternative_suppliers(category: str, current_supplier: str) -> list:
+    """Get mock alternative suppliers for the same category."""
+    import random
+    random.seed(42)
+    
+    all_suppliers = [
+        {'name': 'Precision Metal Works', 'quality_score': 0.96, 'available_capacity': 0.25, 'tier': 'Tier 1'},
+        {'name': 'Global Plastics Inc', 'quality_score': 0.94, 'available_capacity': 0.30, 'tier': 'Tier 1'},
+        {'name': 'AutoParts Direct', 'quality_score': 0.91, 'available_capacity': 0.40, 'tier': 'Tier 2'},
+        {'name': 'Quality Components Ltd', 'quality_score': 0.89, 'available_capacity': 0.35, 'tier': 'Tier 2'},
+        {'name': 'Premium Electronics', 'quality_score': 0.95, 'available_capacity': 0.20, 'tier': 'Tier 1'},
+        {'name': 'CNC Masters', 'quality_score': 0.92, 'available_capacity': 0.45, 'tier': 'Tier 1'},
+    ]
+    
+    # Filter out current supplier and return top alternatives
+    return [s for s in all_suppliers if s['name'] != current_supplier][:3]
 
 
 def render_plant_scenario(monthly_df: pd.DataFrame, plants: list):
@@ -1232,10 +1380,64 @@ def render_part_scenario(parts_df: pd.DataFrame):
             total_cost = selected_data['monthly_scrap_cost'].sum()
             avg_defect_rate = selected_data['defect_rate'].mean()
             
+            # Get supplier info for recommendations
+            supplier_info = None
+            alt_suppliers = []
+            
+            # Show supplier profile if single part selected
+            if len(selected_parts) == 1:
+                part_row = selected_data.iloc[0]
+                supplier_name = part_row.get('supplier_name', 'Unknown Supplier')
+                part_category = part_row.get('part_category', 'General')
+                supplier_info = get_mock_part_supplier_info(supplier_name)
+                alt_suppliers = get_mock_alternative_suppliers(part_category, supplier_name)
+                
+                st.markdown("---")
+                st.markdown("#### Supplier Profile")
+                
+                tier_color = "#10b981" if supplier_info['tier'] == "Tier 1" else "#f59e0b" if supplier_info['tier'] == "Tier 2" else "#ef4444"
+                quality_color = "#10b981" if supplier_info['quality_score'] >= 0.90 else "#f59e0b" if supplier_info['quality_score'] >= 0.80 else "#ef4444"
+                
+                st.markdown(f"""
+                <div style="background: #1a1a2e; border-radius: 12px; padding: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <span style="color: #f1f5f9; font-weight: 600;">{supplier_info['name']}</span>
+                        <span style="background: {tier_color}22; color: {tier_color}; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem;">{supplier_info['tier']}</span>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.85rem;">
+                        <div><span style="color: #64748b;">Category:</span> <span style="color: #f1f5f9;">{supplier_info['category']}</span></div>
+                        <div><span style="color: #64748b;">Region:</span> <span style="color: #f1f5f9;">{supplier_info['region']}</span></div>
+                        <div><span style="color: #64748b;">Quality:</span> <span style="color: {quality_color};">{supplier_info['quality_score']:.1%}</span></div>
+                        <div><span style="color: #64748b;">On-Time:</span> <span style="color: #f1f5f9;">{supplier_info['on_time_delivery']:.1%}</span></div>
+                        <div><span style="color: #64748b;">Capacity:</span> <span style="color: #f1f5f9;">{supplier_info['capacity_util']:.0%} used</span></div>
+                        <div><span style="color: #64748b;">Risk Score:</span> <span style="color: {'#ef4444' if supplier_info['risk_score'] > 50 else '#10b981'};">{supplier_info['risk_score']:.0f}/100</span></div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # Show alternative suppliers if current has quality issues
+                if supplier_info['quality_score'] < 0.90 and alt_suppliers:
+                    st.markdown("##### 🔄 Alternative Suppliers")
+                    for alt in alt_suppliers[:2]:
+                        alt_tier_color = "#10b981" if alt['tier'] == "Tier 1" else "#f59e0b"
+                        st.markdown(f"""
+                        <div style="background: #0f172a; border-radius: 8px; padding: 10px; margin: 4px 0; border-left: 3px solid #10b981;">
+                            <div style="display: flex; justify-content: space-between;">
+                                <span style="color: #f1f5f9; font-weight: 500;">{alt['name']}</span>
+                                <span style="color: {alt_tier_color}; font-size: 0.75rem;">{alt['tier']}</span>
+                            </div>
+                            <div style="font-size: 0.8rem; color: #64748b;">
+                                Quality: <span style="color: #10b981;">{alt['quality_score']:.0%}</span> | 
+                                Capacity Available: <span style="color: #f1f5f9;">{alt['available_capacity']:.0%}</span>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+            
             st.markdown("---")
             
             recommendations = get_part_recommendations(
-                len(selected_parts), total_cost, avg_defect_rate, defect_reduction
+                len(selected_parts), total_cost, avg_defect_rate, defect_reduction,
+                supplier_info, alt_suppliers
             )
             render_recommendations(recommendations)
     

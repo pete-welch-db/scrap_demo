@@ -35,8 +35,20 @@ Detroit Assembly, Louisville Stamping, San Antonio Body, Oakville Paint, Saltill
 ## Shifts
 1=Day (6am-2pm), 2=Evening (2pm-10pm), 3=Night (10pm-6am)
 
-## Formatting Rules
-- Currency: `CONCAT('$', FORMAT_NUMBER(ROUND(SUM(total_scrap_cost), 2), '#,##0.00'))`
-- Percentages: `ROUND(value * 100, 1)` + '%'
-- Always round costs to 2 decimals
+## Formatting Rules (CRITICAL)
+**Never return scientific notation (E7, E6, etc.) for any values.**
+
+### Currency (ALWAYS use this format):
+```sql
+FORMAT_NUMBER(ROUND(SUM(total_scrap_cost), 2), '$#,##0.00') AS `Total Cost`
+```
+
+### Percentages:
+```sql
+CONCAT(ROUND(value * 100, 1), '%') AS `Quality Score`
+```
+
+### Examples:
+- ❌ Wrong: `2.051282593E7`
+- ✅ Correct: `$20,512,825.93`
 

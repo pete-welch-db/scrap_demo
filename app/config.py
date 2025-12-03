@@ -79,11 +79,20 @@ class AppConfig:
     # UI settings
     default_dashboard_height: int = 800
     
+    # Data source: "auto" (try live, fallback to mock) or "mock" (always mock)
+    data_source: str = "auto"
+    
+    @classmethod
+    def from_env(cls) -> "AppConfig":
+        return cls(
+            data_source=os.getenv("DATA_SOURCE", "auto")
+        )
+    
 
 # Global configuration instances
 databricks_config = DatabricksConfig.from_env()
 genie_config = GenieConfig.from_env()
-app_config = AppConfig()
+app_config = AppConfig.from_env()
 
 
 # Theme colors (matching CSS variables)

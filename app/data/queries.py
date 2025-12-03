@@ -173,7 +173,7 @@ def load_work_center_data() -> Optional[pd.DataFrame]:
         top_root_cause,
         oee_scrap_correlation
     FROM {SCHEMA}.scrap_by_work_center_gold
-    ORDER BY work_center_type_lookup, plant_name_lookup
+    ORDER BY work_center_type, plant
     """
     return run_query(query)
 
@@ -296,13 +296,13 @@ def load_forecast_summary() -> Optional[pd.DataFrame]:
     """Load forecast summary metrics."""
     query = f"""
     SELECT 
-        MIN(ds) as forecast_start,
-        MAX(ds) as forecast_end,
-        SUM(yhat) as total_predicted_cost,
-        AVG(yhat) as avg_daily_cost,
+        MIN(forecast_date) as forecast_start,
+        MAX(forecast_date) as forecast_end,
+        SUM(predicted_value) as total_predicted_cost,
+        AVG(predicted_value) as avg_daily_cost,
         COUNT(*) as forecast_days
     FROM {SCHEMA}.ml_total_forecast_results
-    WHERE ds > CURRENT_DATE()
+    WHERE forecast_date > CURRENT_DATE()
     """
     return run_query(query)
 
@@ -327,17 +327,16 @@ def load_recent_anomalies(days: int = 30) -> Optional[pd.DataFrame]:
     """Load recent anomalies from ML detection."""
     query = f"""
     SELECT 
-        transaction_date,
-        plant_name_lookup as plant,
-        defect_category,
-        total_scrap_cost,
-        quantity_scrapped,
+        detection_date as transaction_date,
+        entity_name as plant,
+        daily_cost as total_scrap_cost,
+        daily_qty as quantity_scrapped,
         anomaly_score,
-        anomaly_reason
+        anomaly_type as anomaly_reason
     FROM {SCHEMA}.ml_scrap_anomalies
     WHERE is_anomaly = true
-      AND transaction_date >= DATE_ADD(CURRENT_DATE(), -{days})
-    ORDER BY transaction_date DESC
+      AND detection_date >= DATE_ADD(CURRENT_DATE(), -{days})
+    ORDER BY detection_date DESC
     LIMIT 50
     """
     return run_query(query)

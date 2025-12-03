@@ -5,8 +5,19 @@ Navigation and status sidebar for the application.
 """
 
 import streamlit as st
+import base64
+from pathlib import Path
 from config import databricks_config
 from data.connection import test_db_connection
+
+
+def get_logo_base64():
+    """Load and encode the Databricks logo as base64."""
+    logo_path = Path(__file__).parent.parent / "assets" / "Databricks_Logo.png"
+    if logo_path.exists():
+        with open(logo_path, "rb") as f:
+            return base64.b64encode(f.read()).decode()
+    return None
 
 
 def render_sidebar() -> str:
@@ -17,9 +28,27 @@ def render_sidebar() -> str:
         str: The selected page name
     """
     with st.sidebar:
-        # Logo and title
+        # Databricks logo with white background
+        logo_b64 = get_logo_base64()
+        if logo_b64:
+            st.markdown(f"""
+            <div style="
+                text-align: center; 
+                padding: 16px; 
+                margin-bottom: 16px;
+                background: white;
+                border-radius: 12px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            ">
+                <img src="data:image/png;base64,{logo_b64}" 
+                     style="max-width: 160px; height: auto;" 
+                     alt="Databricks">
+            </div>
+            """, unsafe_allow_html=True)
+        
+        # App title
         st.markdown("""
-        <div style="text-align: center; padding: 20px 0;">
+        <div style="text-align: center; padding: 12px 0;">
             <h2 style="margin: 0; font-size: 1.5rem;">🔧 Scrap Intelligence</h2>
             <p style="color: #64748b; font-size: 0.875rem; margin-top: 8px;">
                 Automotive Quality Analytics
