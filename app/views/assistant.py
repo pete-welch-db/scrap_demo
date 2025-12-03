@@ -8,7 +8,7 @@ API Reference: https://docs.databricks.com/api/azure/workspace/genie
 
 import streamlit as st
 from config import genie_config, databricks_config
-from data.genie_client import get_genie_client
+from data.genie_client import get_genie_client, GenieResponse
 
 
 def render_assistant_page():
@@ -30,6 +30,33 @@ def render_assistant_page():
         render_ai_integrations()
 
 
+def format_genie_response(response: GenieResponse) -> None:
+    """Format and display a Genie response with proper styling."""
+    
+    # Main content/description
+    if response.content:
+        st.markdown(response.content)
+    
+    # Data table
+    if response.data_table:
+        st.markdown(f"**Results** ({response.row_count} rows):")
+        st.markdown(response.data_table)
+    
+    # SQL query in expander (hidden by default like Databricks UI)
+    if response.sql_query:
+        with st.expander("📝 View SQL Query", expanded=False):
+            st.code(response.sql_query, language="sql")
+    
+    # Suggested follow-up questions
+    if response.suggested_questions:
+        st.markdown("---")
+        st.markdown("**💡 Suggested follow-ups:**")
+        for q in response.suggested_questions:
+            if st.button(f"→ {q}", key=f"suggest_{hash(q)}", use_container_width=True):
+                st.session_state.messages.append({"role": "user", "content": q})
+                st.rerun()
+
+
 def render_chat_interface():
     """Render the chat interface with Genie API integration."""
     
@@ -49,7 +76,8 @@ I can query your scrap data directly. Try asking:
 • "Which suppliers have quality scores below 0.85?"
 • "Compare defect rates across all shifts"
 
-Ask me anything about your scrap data!"""
+Ask me anything about your scrap data!""",
+                "type": "intro"
             }
         ]
     
@@ -60,9 +88,14 @@ Ask me anything about your scrap data!"""
         st.session_state.processing = False
     
     # Display chat messages
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"]):
+            if msg.get("type") == "genie_response" and "response_obj" in msg:
+                # Render structured Genie response
+                format_genie_response(msg["response_obj"])
+            else:
+                # Render plain text
+                st.markdown(msg["content"])
     
     # Chat input
     if prompt := st.chat_input("Ask about scrap data...", disabled=st.session_state.processing):
@@ -81,17 +114,22 @@ Ask me anything about your scrap data!"""
             try:
                 client = st.session_state.genie_client
                 
-                status_placeholder.markdown("⏳ *Waiting for Genie to analyze your question (this may take up to 2 minutes)...*")
+                status_placeholder.markdown("⏳ *Analyzing your question (this may take up to 30 seconds)...*")
                 
                 message_id, response = client.send_message(prompt)
                 
                 status_placeholder.empty()
                 
                 if response:
-                    st.markdown(response)
+                    # Display the formatted response
+                    format_genie_response(response)
+                    
+                    # Store in messages
                     st.session_state.messages.append({
-                        "role": "assistant", 
-                        "content": response
+                        "role": "assistant",
+                        "content": client.format_response_markdown(response),
+                        "type": "genie_response",
+                        "response_obj": response
                     })
                 else:
                     error_msg = "Sorry, I couldn't get a response. Please try again."
@@ -151,7 +189,6 @@ def render_ai_integrations():
         </div>
         """, unsafe_allow_html=True)
         
-        # Link to open in Databricks
         st.link_button(
             "🔗 Open in Databricks",
             genie_url,
@@ -166,12 +203,11 @@ def render_ai_integrations():
     st.markdown("### ⚡ Quick Questions")
     
     quick_questions = [
-        ("📊 YTD Summary", "What's our total scrap cost year to date and how does it compare to last year?"),
-        ("🏭 Plant Ranking", "Rank all plants by total scrap cost this year, highest to lowest"),
-        ("📦 Top Defects", "What are the top 5 defect types by scrap cost?"),
-        ("🏭 Worst Plant", "Which plant has the highest scrap rate this month?"),
-        ("👥 Supplier Issues", "Which suppliers have quality scores below 0.85?"),
-        ("📋 Recent 8Ds", "How many 8D reports were opened in the last 30 days?"),
+        ("📊 YTD Summary", "What's our total scrap cost year to date?"),
+        ("🏭 Plant Ranking", "Show the top 5 plants by scrap cost this year"),
+        ("📦 Top Defects", "What are the top 5 defect types by cost?"),
+        ("👥 Supplier Issues", "Which suppliers have the highest scrap rates?"),
+        ("📋 8D Reports", "How many 8D reports are currently open?"),
     ]
     
     for label, question in quick_questions:

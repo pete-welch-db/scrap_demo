@@ -2,6 +2,10 @@
 What-If Scenarios Page
 ======================
 Interactive scenario planning for scrap reduction strategies.
+
+Data Sources:
+- Live data from Databricks Gold tables when available
+- Mock data fallback for development/demo when DB unavailable
 """
 
 import streamlit as st
@@ -10,12 +14,83 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from components.metrics import create_metric_card, create_plotly_theme
+from data.queries import (
+    load_plant_monthly_data,
+    load_work_center_data,
+    load_supplier_scenario_data,
+    load_part_scrap_data,
+    get_plants_list,
+    get_work_center_types,
+    get_supplier_alternatives
+)
 
 
-# Cache mock data at module level to avoid reload issues
-@st.cache_data
+# =============================================================================
+# Data Loading Functions - Live Data with Mock Fallback
+# =============================================================================
+
+def get_data_source_indicator(using_live: bool) -> str:
+    """Return a small indicator showing data source."""
+    if using_live:
+        return "🟢 Live Data"
+    return "🟡 Demo Data"
+
+
+@st.cache_data(ttl=300)
 def get_scenario_data():
-    """Generate mock data for scenarios."""
+    """
+    Load scenario data from Databricks or generate mock data.
+    
+    Returns:
+        Tuple of (monthly_df, parts_df, wc_df, plants, work_centers, is_live)
+    """
+    # Try loading live data
+    monthly_df = load_plant_monthly_data()
+    parts_df = load_part_scrap_data()
+    wc_df = load_work_center_data()
+    plants_list = get_plants_list()
+    wc_types = get_work_center_types()
+    
+    # Check if we got live data
+    if monthly_df is not None and len(monthly_df) > 0:
+        # Transform to expected format
+        monthly_df = monthly_df.rename(columns={'scrap_cost': 'scrap_cost'})
+        monthly_df['month'] = pd.to_datetime(monthly_df['month_date'])
+        
+        plants = plants_list if plants_list else monthly_df['plant'].unique().tolist()
+        work_centers = wc_types if wc_types else wc_df['work_center_type'].unique().tolist() if wc_df is not None else []
+        
+        # Transform parts data
+        if parts_df is not None:
+            parts_df = parts_df.rename(columns={
+                'monthly_scrap_cost': 'monthly_scrap_cost',
+                'defect_rate': 'defect_rate', 
+                'unit_cost': 'unit_cost'
+            })
+        
+        # Transform work center data  
+        if wc_df is not None:
+            wc_df = wc_df.rename(columns={
+                'work_center_type': 'work_center',
+                'monthly_scrap_cost': 'monthly_scrap_cost',
+                'oee': 'oee'
+            })
+            # Aggregate by work center type and plant
+            wc_df = wc_df.groupby(['work_center', 'plant']).agg({
+                'monthly_scrap_cost': 'mean',
+                'oee': 'mean',
+                'avg_equipment_age': 'mean'
+            }).reset_index()
+            wc_df = wc_df.rename(columns={'avg_equipment_age': 'equipment_age'})
+        
+        return monthly_df, parts_df, wc_df, plants, work_centers, True
+    
+    # Fall back to mock data
+    return _generate_mock_scenario_data()
+
+
+def _generate_mock_scenario_data():
+    """Generate mock data for scenarios when live data unavailable."""
     np.random.seed(42)
     
     plants = [
@@ -31,8 +106,8 @@ def get_scenario_data():
     part_names = [f"Component {chr(65 + i % 26)}-{i}" for i in range(50)]
     
     work_centers = [
-        "Stamping Press Line 1", 
-        "Welding Cell A", 
+        "Stamping Press", 
+        "Welding Cell", 
         "CNC Machining", 
         "Injection Molding", 
         "Assembly Line", 
@@ -78,24 +153,134 @@ def get_scenario_data():
             })
     wc_df = pd.DataFrame(wc_data)
     
-    return monthly_df, parts_df, wc_df, plants, work_centers
+    return monthly_df, parts_df, wc_df, plants, work_centers, False
+
+
+@st.cache_data(ttl=300)
+def get_supplier_data():
+    """
+    Load supplier data from Databricks or generate mock data.
+    
+    Returns:
+        Tuple of (suppliers_df, is_live)
+    """
+    # Try loading live data
+    suppliers_df = load_supplier_scenario_data()
+    
+    if suppliers_df is not None and len(suppliers_df) > 0:
+        # Rename columns to match expected format
+        suppliers_df = suppliers_df.rename(columns={
+            'supplier_id': 'id',
+            'name': 'name',
+            'tier': 'tier',
+            'category': 'category',
+            'region': 'region',
+            'quality_score': 'quality_score',
+            'on_time_delivery': 'on_time_delivery',
+            'parts_supplied': 'parts_supplied',
+            'annual_spend': 'annual_spend',
+            'scrap_cost': 'scrap_cost',
+            'scrap_rate': 'scrap_rate',
+            'capacity_util': 'capacity_util',
+            'available_capacity': 'available_capacity',
+            'risk_score': 'risk_score',
+            'unit_cost_index': 'unit_cost_index'
+        })
+        return suppliers_df, True
+    
+    # Fall back to mock data
+    return _generate_mock_supplier_data()
+
+
+def _generate_mock_supplier_data():
+    """Generate mock supplier scenario data."""
+    np.random.seed(42)
+    
+    # Supplier master data
+    suppliers = [
+        {"id": "SUP-001", "name": "Precision Metal Works", "tier": "Tier 1", "category": "Stamping", "region": "Midwest"},
+        {"id": "SUP-002", "name": "Allied Steel Components", "tier": "Tier 1", "category": "Stamping", "region": "Southeast"},
+        {"id": "SUP-003", "name": "TechForm Industries", "tier": "Tier 1", "category": "Forming", "region": "Midwest"},
+        {"id": "SUP-004", "name": "Premier Plastics Inc", "tier": "Tier 1", "category": "Injection Molding", "region": "Southwest"},
+        {"id": "SUP-005", "name": "Global Plastics LLC", "tier": "Tier 2", "category": "Injection Molding", "region": "Mexico"},
+        {"id": "SUP-006", "name": "Elite Machining Corp", "tier": "Tier 1", "category": "Machining", "region": "Midwest"},
+        {"id": "SUP-007", "name": "Rapid CNC Solutions", "tier": "Tier 2", "category": "Machining", "region": "Canada"},
+        {"id": "SUP-008", "name": "Superior Weld Systems", "tier": "Tier 1", "category": "Welding", "region": "Midwest"},
+        {"id": "SUP-009", "name": "AutoWeld Technologies", "tier": "Tier 2", "category": "Welding", "region": "Southeast"},
+        {"id": "SUP-010", "name": "Coating Solutions Inc", "tier": "Tier 1", "category": "Coating", "region": "Southwest"},
+        {"id": "SUP-011", "name": "PaintTech Industries", "tier": "Tier 2", "category": "Coating", "region": "Mexico"},
+        {"id": "SUP-012", "name": "Assembly Masters", "tier": "Tier 1", "category": "Assembly", "region": "Midwest"},
+    ]
+    
+    # Add performance metrics
+    for sup in suppliers:
+        # Quality score (higher = better, 0.7-0.99)
+        base_quality = 0.92 if sup["tier"] == "Tier 1" else 0.85
+        sup["quality_score"] = min(0.99, max(0.70, base_quality + np.random.uniform(-0.08, 0.07)))
+        
+        # On-time delivery (0.8-0.99)
+        sup["on_time_delivery"] = np.random.uniform(0.82, 0.98)
+        
+        # Annual spend
+        if sup["tier"] == "Tier 1":
+            sup["annual_spend"] = np.random.uniform(2_000_000, 8_000_000)
+        else:
+            sup["annual_spend"] = np.random.uniform(500_000, 2_500_000)
+        
+        # Scrap rate (lower = better)
+        sup["scrap_rate"] = (1 - sup["quality_score"]) * np.random.uniform(0.8, 1.5)
+        
+        # Scrap cost contribution
+        sup["scrap_cost"] = sup["annual_spend"] * sup["scrap_rate"]
+        
+        # Parts supplied count
+        sup["parts_supplied"] = np.random.randint(5, 25)
+        
+        # Capacity utilization
+        sup["capacity_util"] = np.random.uniform(0.60, 0.95)
+        
+        # Available capacity (inverse of utilization)
+        sup["available_capacity"] = 1 - sup["capacity_util"]
+        
+        # Cost per unit (relative)
+        sup["unit_cost_index"] = 1.0 if sup["tier"] == "Tier 1" else np.random.uniform(0.85, 1.05)
+        
+        # Risk score (0-100, lower = better)
+        risk_base = 25 if sup["tier"] == "Tier 1" else 40
+        sup["risk_score"] = max(5, min(95, risk_base + np.random.uniform(-15, 25)))
+    
+    suppliers_df = pd.DataFrame(suppliers)
+    
+    return suppliers_df, False  # Return False for is_live flag
 
 
 def render_scenarios_page():
     """Render the What-If Scenarios page."""
     
-    st.markdown("""
-    <h1>🎯 What-If Scenarios</h1>
-    <p style="font-size: 1.1rem; color: #64748b; margin-bottom: 24px;">
-        Simulate scrap reduction strategies and estimate cost savings
-    </p>
+    # Load data once
+    monthly_df, parts_df, wc_df, plants, work_centers, data_is_live = get_scenario_data()
+    suppliers_df, supplier_data_is_live = get_supplier_data()
+    
+    # Show data source indicator
+    is_live = data_is_live or supplier_data_is_live
+    data_source = get_data_source_indicator(is_live)
+    
+    st.markdown(f"""
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+        <div>
+            <h1 style="margin: 0;">🎯 What-If Scenarios</h1>
+            <p style="font-size: 1.1rem; color: #64748b; margin: 8px 0 0 0;">
+                Simulate scrap reduction strategies and estimate cost savings
+            </p>
+        </div>
+        <div style="background: #1a1a2e; padding: 8px 16px; border-radius: 8px; font-size: 0.85rem;">
+            {data_source}
+        </div>
+    </div>
     """, unsafe_allow_html=True)
     
-    # Load data once
-    monthly_df, parts_df, wc_df, plants, work_centers = get_scenario_data()
-    
-    # Scenario tabs
-    tab1, tab2, tab3 = st.tabs(["🏭 By Plant", "🔧 By Work Center", "📦 By Part"])
+    # Scenario tabs - now with 4 tabs
+    tab1, tab2, tab3, tab4 = st.tabs(["🏭 By Plant", "🔧 By Work Center", "📦 By Part", "🏢 By Supplier"])
     
     with tab1:
         render_plant_scenario(monthly_df, plants)
@@ -105,253 +290,93 @@ def render_scenarios_page():
     
     with tab3:
         render_part_scenario(parts_df)
+    
+    with tab4:
+        render_supplier_scenario(suppliers_df)
 
 
-def get_plant_recommendations(plant: str, reduction_target: int, roi_months: float, annual_savings: float) -> list:
-    """Generate context-aware recommendations for plant scenario."""
+def get_supplier_recommendations(supplier: dict, suppliers_df: pd.DataFrame, spend_change: int, action: str) -> list:
+    """Generate context-aware recommendations for supplier scenario."""
     recommendations = []
     
-    # Based on reduction target
-    if reduction_target >= 30:
-        recommendations.append({
-            "icon": "🎯",
-            "title": "Aggressive Target",
-            "desc": "Consider phased implementation to manage risk",
-            "priority": "high"
-        })
-        recommendations.append({
-            "icon": "👥",
-            "title": "Cross-Functional Team",
-            "desc": "Form dedicated task force with quality, ops, and engineering",
-            "priority": "high"
-        })
+    # Get alternative suppliers in same category
+    alternatives = suppliers_df[
+        (suppliers_df['category'] == supplier['category']) & 
+        (suppliers_df['id'] != supplier['id'])
+    ].sort_values('quality_score', ascending=False)
     
-    if reduction_target >= 20:
-        recommendations.append({
-            "icon": "📊",
-            "title": "Root Cause Analysis",
-            "desc": "Conduct Pareto analysis on top defect categories",
-            "priority": "high"
-        })
+    if action == "reduce":
+        if supplier['quality_score'] < 0.85:
+            recommendations.append({
+                "icon": "⚠️",
+                "title": "Quality Concern",
+                "desc": f"Quality score {supplier['quality_score']:.1%} is below target. Consider accelerating reduction.",
+                "priority": "high"
+            })
+        
+        if spend_change >= 30:
+            recommendations.append({
+                "icon": "📋",
+                "title": "Supplier Development Plan",
+                "desc": "Major reduction requires formal communication and timeline",
+                "priority": "high"
+            })
+        
+        if len(alternatives) > 0:
+            best_alt = alternatives.iloc[0]
+            if best_alt['available_capacity'] > 0.15:
+                recommendations.append({
+                    "icon": "✅",
+                    "title": f"Shift to {best_alt['name']}",
+                    "desc": f"Quality: {best_alt['quality_score']:.1%}, {best_alt['available_capacity']:.0%} capacity available",
+                    "priority": "high"
+                })
+        
+        if supplier['parts_supplied'] > 15:
+            recommendations.append({
+                "icon": "📦",
+                "title": "Multi-Source Parts",
+                "desc": f"Supplier has {supplier['parts_supplied']} parts. Prioritize highest-scrap items first.",
+                "priority": "medium"
+            })
     
-    # Based on ROI
-    if roi_months <= 12:
-        recommendations.append({
-            "icon": "🚀",
-            "title": "Quick Win Opportunity",
-            "desc": "Fast ROI - prioritize this initiative",
-            "priority": "high"
-        })
-    elif roi_months > 24:
-        recommendations.append({
-            "icon": "⚠️",
-            "title": "Long Payback Period",
-            "desc": "Consider reducing investment or increasing scope",
-            "priority": "medium"
-        })
-    
-    # Plant-specific recommendations
-    if "Stamping" in plant:
-        recommendations.append({
-            "icon": "🔧",
-            "title": "Die Maintenance",
-            "desc": "Focus on die wear monitoring and predictive maintenance",
-            "priority": "medium"
-        })
-    elif "Assembly" in plant:
-        recommendations.append({
-            "icon": "🤖",
-            "title": "Assembly Automation",
-            "desc": "Review torque specs and automated assembly verification",
-            "priority": "medium"
-        })
-    elif "Paint" in plant:
-        recommendations.append({
-            "icon": "🌡️",
-            "title": "Environment Control",
-            "desc": "Monitor booth temperature/humidity and paint viscosity",
-            "priority": "medium"
-        })
+    else:  # increase
+        if supplier['quality_score'] >= 0.95:
+            recommendations.append({
+                "icon": "⭐",
+                "title": "Top Performer",
+                "desc": "Excellent quality score supports increased allocation",
+                "priority": "high"
+            })
+        
+        if supplier['capacity_util'] > 0.85:
+            recommendations.append({
+                "icon": "⚠️",
+                "title": "Capacity Constraint",
+                "desc": f"Supplier at {supplier['capacity_util']:.0%} capacity. Verify ability to scale.",
+                "priority": "high"
+            })
+        
+        if supplier['tier'] == "Tier 2":
+            recommendations.append({
+                "icon": "📈",
+                "title": "Tier Upgrade Candidate",
+                "desc": "Consider upgrading to Tier 1 with increased volume commitment",
+                "priority": "medium"
+            })
     
     # General recommendations
-    recommendations.append({
-        "icon": "📈",
-        "title": "Track Leading Indicators",
-        "desc": "Monitor weekly scrap trends, not just monthly",
-        "priority": "low"
-    })
-    
-    recommendations.append({
-        "icon": "🏆",
-        "title": "Operator Incentives",
-        "desc": "Implement quality bonuses tied to scrap reduction",
-        "priority": "low"
-    })
-    
-    return recommendations[:6]  # Return top 6
-
-
-def get_work_center_recommendations(work_center: str, avg_oee: float, avg_age: float, target_oee: int) -> list:
-    """Generate context-aware recommendations for work center scenario."""
-    recommendations = []
-    
-    # Based on OEE
-    if avg_oee < 0.75:
-        recommendations.append({
-            "icon": "🔴",
-            "title": "Critical OEE",
-            "desc": "OEE below 75% - major improvement potential",
-            "priority": "high"
-        })
-        recommendations.append({
-            "icon": "📉",
-            "title": "Identify Six Big Losses",
-            "desc": "Analyze breakdown, setup, idle, speed, defects, startup",
-            "priority": "high"
-        })
-    
-    # Based on equipment age
-    if avg_age > 12:
-        recommendations.append({
-            "icon": "⚙️",
-            "title": "Aging Equipment",
-            "desc": "Consider capital refresh or rebuild program",
-            "priority": "high"
-        })
-        recommendations.append({
-            "icon": "🔮",
-            "title": "Predictive Maintenance",
-            "desc": "Install sensors for vibration, temperature monitoring",
-            "priority": "medium"
-        })
-    elif avg_age > 8:
-        recommendations.append({
-            "icon": "🛠️",
-            "title": "Enhanced PM Program",
-            "desc": "Increase preventive maintenance frequency",
-            "priority": "medium"
-        })
-    
-    # Work center specific
-    if "Stamping" in work_center:
-        recommendations.append({
-            "icon": "📐",
-            "title": "Tool & Die Program",
-            "desc": "Implement die tracking and wear prediction",
-            "priority": "medium"
-        })
-    elif "Welding" in work_center:
-        recommendations.append({
-            "icon": "⚡",
-            "title": "Weld Parameter Control",
-            "desc": "Real-time monitoring of current, voltage, wire feed",
-            "priority": "medium"
-        })
-    elif "CNC" in work_center:
-        recommendations.append({
-            "icon": "🎯",
-            "title": "Tool Life Management",
-            "desc": "Track tool wear and implement automatic offsets",
-            "priority": "medium"
-        })
-    elif "Injection" in work_center:
-        recommendations.append({
-            "icon": "🌡️",
-            "title": "Process Monitoring",
-            "desc": "Monitor barrel temp, injection pressure, cycle time",
-            "priority": "medium"
-        })
-    
-    # General
-    recommendations.append({
-        "icon": "👨‍🏫",
-        "title": "Operator Training",
-        "desc": "Certify operators on TPM and quality standards",
-        "priority": "low"
-    })
-    
-    recommendations.append({
-        "icon": "📋",
-        "title": "Standard Work",
-        "desc": "Document and enforce standard operating procedures",
-        "priority": "low"
-    })
-    
-    return recommendations[:6]
-
-
-def get_part_recommendations(num_parts: int, total_cost: float, avg_defect_rate: float, reduction_target: int) -> list:
-    """Generate context-aware recommendations for part scenario."""
-    recommendations = []
-    
-    # Based on defect rate
-    if avg_defect_rate > 0.05:
-        recommendations.append({
-            "icon": "🔴",
-            "title": "High Defect Rate",
-            "desc": f"Avg {avg_defect_rate*100:.1f}% - root cause investigation needed",
-            "priority": "high"
-        })
-        recommendations.append({
-            "icon": "🔍",
-            "title": "PFMEA Review",
-            "desc": "Update failure modes analysis for high-scrap parts",
-            "priority": "high"
-        })
-    
-    # Based on number of parts selected
-    if num_parts >= 5:
-        recommendations.append({
-            "icon": "🎯",
-            "title": "Focus Strategy",
-            "desc": "Consider tackling top 3 parts first for faster wins",
-            "priority": "medium"
-        })
-    
-    # Based on total cost
-    if total_cost > 100000:
-        recommendations.append({
-            "icon": "💰",
-            "title": "High-Value Target",
-            "desc": f"${total_cost/1000:.0f}K/month - executive sponsorship recommended",
-            "priority": "high"
-        })
-    
-    # Based on reduction target
-    if reduction_target >= 50:
-        recommendations.append({
-            "icon": "🔬",
-            "title": "Design Review",
-            "desc": "Consider part redesign or material change",
-            "priority": "medium"
-        })
-    
-    # General recommendations
-    recommendations.append({
-        "icon": "🏭",
-        "title": "Supplier Quality",
-        "desc": "Review incoming inspection and supplier PPM",
-        "priority": "medium"
-    })
-    
     recommendations.append({
         "icon": "📊",
-        "title": "SPC Implementation",
-        "desc": "Add statistical process control on critical dimensions",
-        "priority": "medium"
-    })
-    
-    recommendations.append({
-        "icon": "✅",
-        "title": "Error Proofing",
-        "desc": "Implement poka-yoke at key process steps",
+        "title": "Track Quality Metrics",
+        "desc": "Monitor PPM, delivery, and scrap weekly during transition",
         "priority": "low"
     })
     
     recommendations.append({
-        "icon": "🔄",
-        "title": "8D Follow-Up",
-        "desc": "Review historical 8D reports for these parts",
+        "icon": "💰",
+        "title": "Negotiate Terms",
+        "desc": "Volume changes may warrant pricing renegotiation",
         "priority": "low"
     })
     
@@ -402,6 +427,495 @@ def render_recommendations(recommendations: list, title: str = "💡 Recommended
     """, unsafe_allow_html=True)
 
 
+def render_supplier_scenario(suppliers_df: pd.DataFrame):
+    """Render the supplier what-if scenario tab."""
+    
+    st.markdown("### Supplier Spend & Allocation Analysis")
+    
+    col1, col2 = st.columns([1, 2])
+    
+    with col1:
+        st.markdown("#### Scenario Parameters")
+        
+        # Supplier selection
+        supplier_options = suppliers_df['name'].tolist()
+        supplier_index = st.selectbox(
+            "Select Supplier",
+            range(len(supplier_options)),
+            format_func=lambda x: supplier_options[x],
+            key="scenario_supplier_select"
+        )
+        selected_supplier = suppliers_df.iloc[supplier_index].to_dict()
+        
+        # Spend adjustment direction
+        spend_action = st.radio(
+            "Spend Adjustment",
+            ["Reduce Spend", "Increase Spend"],
+            key="scenario_spend_action",
+            horizontal=True
+        )
+        
+        # Spend change percentage
+        spend_change = st.slider(
+            f"{'Reduction' if spend_action == 'Reduce Spend' else 'Increase'} Target (%)",
+            min_value=5,
+            max_value=50,
+            value=20,
+            step=5,
+            key="scenario_spend_change"
+        )
+        
+        # Show current supplier info
+        st.markdown("---")
+        st.markdown("#### Current Supplier Profile")
+        
+        tier_color = "#10b981" if selected_supplier['tier'] == "Tier 1" else "#f59e0b"
+        st.markdown(f"""
+        <div style="background: #1a1a2e; border-radius: 12px; padding: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <span style="color: #f1f5f9; font-weight: 600;">{selected_supplier['name']}</span>
+                <span style="background: {tier_color}22; color: {tier_color}; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem;">{selected_supplier['tier']}</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.85rem;">
+                <div><span style="color: #64748b;">Category:</span> <span style="color: #f1f5f9;">{selected_supplier['category']}</span></div>
+                <div><span style="color: #64748b;">Region:</span> <span style="color: #f1f5f9;">{selected_supplier['region']}</span></div>
+                <div><span style="color: #64748b;">Quality:</span> <span style="color: {'#10b981' if selected_supplier['quality_score'] >= 0.90 else '#f59e0b'};">{selected_supplier['quality_score']:.1%}</span></div>
+                <div><span style="color: #64748b;">On-Time:</span> <span style="color: #f1f5f9;">{selected_supplier['on_time_delivery']:.1%}</span></div>
+                <div><span style="color: #64748b;">Capacity:</span> <span style="color: #f1f5f9;">{selected_supplier['capacity_util']:.0%} used</span></div>
+                <div><span style="color: #64748b;">Risk Score:</span> <span style="color: {'#ef4444' if selected_supplier['risk_score'] > 50 else '#10b981'};">{selected_supplier['risk_score']:.0f}/100</span></div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("---")
+        
+        # Recommendations
+        action = "reduce" if spend_action == "Reduce Spend" else "increase"
+        recommendations = get_supplier_recommendations(selected_supplier, suppliers_df, spend_change, action)
+        render_recommendations(recommendations)
+    
+    with col2:
+        # Calculate impact
+        current_spend = selected_supplier['annual_spend']
+        current_scrap = selected_supplier['scrap_cost']
+        
+        if spend_action == "Reduce Spend":
+            new_spend = current_spend * (1 - spend_change / 100)
+            spend_delta = current_spend - new_spend
+            new_scrap = current_scrap * (1 - spend_change / 100)
+            scrap_delta = current_scrap - new_scrap
+        else:
+            new_spend = current_spend * (1 + spend_change / 100)
+            spend_delta = new_spend - current_spend
+            # Increasing spend with good supplier may reduce overall scrap
+            quality_factor = selected_supplier['quality_score']
+            new_scrap = current_scrap * (1 + spend_change / 100 * (1 - quality_factor))
+            scrap_delta = new_scrap - current_scrap
+        
+        st.markdown("#### Projected Impact")
+        
+        # KPI cards
+        kpi_col1, kpi_col2, kpi_col3 = st.columns(3)
+        
+        with kpi_col1:
+            st.markdown(create_metric_card(
+                f"${current_spend/1e6:.2f}M",
+                "Current Annual Spend"
+            ), unsafe_allow_html=True)
+        
+        with kpi_col2:
+            delta_sign = "-" if spend_action == "Reduce Spend" else "+"
+            st.markdown(create_metric_card(
+                f"${new_spend/1e6:.2f}M",
+                "Projected Spend",
+                -spend_change if spend_action == "Reduce Spend" else spend_change
+            ), unsafe_allow_html=True)
+        
+        with kpi_col3:
+            scrap_change_pct = (scrap_delta / current_scrap * 100) if current_scrap > 0 else 0
+            st.markdown(create_metric_card(
+                f"${abs(scrap_delta)/1e3:.0f}K",
+                "Scrap Impact",
+                -abs(scrap_change_pct) if spend_action == "Reduce Spend" else scrap_change_pct
+            ), unsafe_allow_html=True)
+        
+        # Alternative suppliers section
+        st.markdown("#### 🔄 Alternative Suppliers")
+        
+        alternatives = suppliers_df[
+            (suppliers_df['category'] == selected_supplier['category']) & 
+            (suppliers_df['id'] != selected_supplier['id'])
+        ].sort_values('quality_score', ascending=False)
+        
+        if len(alternatives) > 0:
+            st.markdown(f"*Suppliers in **{selected_supplier['category']}** category that could absorb demand:*")
+            
+            # Create comparison chart
+            fig = go.Figure()
+            
+            # Add current supplier
+            fig.add_trace(go.Bar(
+                name='Current',
+                x=[selected_supplier['name'][:20]],
+                y=[selected_supplier['quality_score'] * 100],
+                marker_color='#6366f1',
+                text=[f"{selected_supplier['quality_score']:.1%}"],
+                textposition='outside'
+            ))
+            
+            # Add alternatives
+            for _, alt in alternatives.head(4).iterrows():
+                color = '#10b981' if alt['quality_score'] > selected_supplier['quality_score'] else '#f59e0b'
+                fig.add_trace(go.Bar(
+                    name=alt['name'][:15],
+                    x=[alt['name'][:20]],
+                    y=[alt['quality_score'] * 100],
+                    marker_color=color,
+                    text=[f"{alt['quality_score']:.1%}"],
+                    textposition='outside'
+                ))
+            
+            fig.update_layout(
+                **create_plotly_theme(),
+                height=250,
+                margin=dict(l=0, r=0, t=30, b=0),
+                showlegend=False,
+                yaxis_title="Quality Score (%)",
+                yaxis_range=[70, 105]
+            )
+            
+            st.plotly_chart(fig, use_container_width=True, key="supplier_quality_chart")
+            
+            # Detailed alternatives table
+            st.markdown("##### Available Capacity & Details")
+            
+            alt_display = alternatives.head(4)[['name', 'tier', 'quality_score', 'available_capacity', 'risk_score', 'unit_cost_index']].copy()
+            alt_display['quality_score'] = alt_display['quality_score'].apply(lambda x: f"{x:.1%}")
+            alt_display['available_capacity'] = alt_display['available_capacity'].apply(lambda x: f"{x:.0%}")
+            alt_display['risk_score'] = alt_display['risk_score'].apply(lambda x: f"{x:.0f}")
+            alt_display['unit_cost_index'] = alt_display['unit_cost_index'].apply(lambda x: f"{x:.2f}x")
+            alt_display.columns = ['Supplier', 'Tier', 'Quality', 'Available Cap.', 'Risk', 'Cost Index']
+            
+            st.dataframe(alt_display, use_container_width=True, hide_index=True)
+            
+            # Reallocation recommendation
+            if spend_action == "Reduce Spend" and len(alternatives) > 0:
+                best_alt = alternatives.iloc[0]
+                reallocate_amount = spend_delta * 0.8  # Assume 80% can be reallocated
+                
+                st.markdown(f"""
+                <div class="glass-card">
+                    <h4 style="color: #f1f5f9; margin-bottom: 12px;">📊 Recommended Reallocation</h4>
+                    <p style="color: #94a3b8; margin-bottom: 12px;">
+                        Shift <strong style="color: #10b981;">${reallocate_amount/1e6:.2f}M</strong> 
+                        ({spend_change * 0.8:.0f}% of reduction) to <strong style="color: #f1f5f9;">{best_alt['name']}</strong>
+                    </p>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; font-size: 0.85rem;">
+                        <div style="background: #12121a; padding: 12px; border-radius: 8px; text-align: center;">
+                            <p style="color: #64748b; margin: 0;">Quality Gain</p>
+                            <p style="color: #10b981; font-size: 1.25rem; font-weight: 600; margin: 4px 0;">
+                                +{(best_alt['quality_score'] - selected_supplier['quality_score']) * 100:.1f}%
+                            </p>
+                        </div>
+                        <div style="background: #12121a; padding: 12px; border-radius: 8px; text-align: center;">
+                            <p style="color: #64748b; margin: 0;">Capacity Fit</p>
+                            <p style="color: {'#10b981' if best_alt['available_capacity'] > 0.2 else '#f59e0b'}; font-size: 1.25rem; font-weight: 600; margin: 4px 0;">
+                                {best_alt['available_capacity']:.0%}
+                            </p>
+                        </div>
+                        <div style="background: #12121a; padding: 12px; border-radius: 8px; text-align: center;">
+                            <p style="color: #64748b; margin: 0;">Est. Scrap Savings</p>
+                            <p style="color: #10b981; font-size: 1.25rem; font-weight: 600; margin: 4px 0;">
+                                ${(scrap_delta * (best_alt['quality_score'] / selected_supplier['quality_score']))/1e3:.0f}K
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.warning(f"No alternative suppliers found in the {selected_supplier['category']} category.")
+        
+        # Supplier comparison scatter
+        st.markdown("#### 📈 All Suppliers: Quality vs Scrap Cost")
+        
+        fig2 = px.scatter(
+            suppliers_df,
+            x='quality_score',
+            y='scrap_cost',
+            size='annual_spend',
+            color='tier',
+            hover_name='name',
+            hover_data=['category', 'capacity_util', 'risk_score'],
+            color_discrete_map={'Tier 1': '#6366f1', 'Tier 2': '#f59e0b'},
+            labels={
+                'quality_score': 'Quality Score',
+                'scrap_cost': 'Annual Scrap Cost ($)',
+                'tier': 'Tier'
+            }
+        )
+        
+        # Highlight selected supplier
+        fig2.add_trace(go.Scatter(
+            x=[selected_supplier['quality_score']],
+            y=[selected_supplier['scrap_cost']],
+            mode='markers',
+            marker=dict(size=25, color='#ef4444', symbol='star', line=dict(width=2, color='white')),
+            name='Selected',
+            hoverinfo='skip'
+        ))
+        
+        fig2.update_layout(
+            **create_plotly_theme(),
+            height=350,
+            margin=dict(l=0, r=0, t=20, b=0),
+            legend=dict(orientation='h', y=-0.15)
+        )
+        
+        st.plotly_chart(fig2, use_container_width=True, key="supplier_scatter_chart")
+
+
+# =============================================================================
+# Other scenario functions (Plant, Work Center, Part) - kept from original
+# =============================================================================
+
+def get_plant_recommendations(plant: str, reduction_target: int, roi_months: float, annual_savings: float) -> list:
+    """Generate context-aware recommendations for plant scenario."""
+    recommendations = []
+    
+    if reduction_target >= 30:
+        recommendations.append({
+            "icon": "🎯",
+            "title": "Aggressive Target",
+            "desc": "Consider phased implementation to manage risk",
+            "priority": "high"
+        })
+        recommendations.append({
+            "icon": "👥",
+            "title": "Cross-Functional Team",
+            "desc": "Form dedicated task force with quality, ops, and engineering",
+            "priority": "high"
+        })
+    
+    if reduction_target >= 20:
+        recommendations.append({
+            "icon": "📊",
+            "title": "Root Cause Analysis",
+            "desc": "Conduct Pareto analysis on top defect categories",
+            "priority": "high"
+        })
+    
+    if roi_months <= 12:
+        recommendations.append({
+            "icon": "🚀",
+            "title": "Quick Win Opportunity",
+            "desc": "Fast ROI - prioritize this initiative",
+            "priority": "high"
+        })
+    elif roi_months > 24:
+        recommendations.append({
+            "icon": "⚠️",
+            "title": "Long Payback Period",
+            "desc": "Consider reducing investment or increasing scope",
+            "priority": "medium"
+        })
+    
+    if "Stamping" in plant:
+        recommendations.append({
+            "icon": "🔧",
+            "title": "Die Maintenance",
+            "desc": "Focus on die wear monitoring and predictive maintenance",
+            "priority": "medium"
+        })
+    elif "Assembly" in plant:
+        recommendations.append({
+            "icon": "🤖",
+            "title": "Assembly Automation",
+            "desc": "Review torque specs and automated assembly verification",
+            "priority": "medium"
+        })
+    elif "Paint" in plant:
+        recommendations.append({
+            "icon": "🌡️",
+            "title": "Environment Control",
+            "desc": "Monitor booth temperature/humidity and paint viscosity",
+            "priority": "medium"
+        })
+    
+    recommendations.append({
+        "icon": "📈",
+        "title": "Track Leading Indicators",
+        "desc": "Monitor weekly scrap trends, not just monthly",
+        "priority": "low"
+    })
+    
+    recommendations.append({
+        "icon": "🏆",
+        "title": "Operator Incentives",
+        "desc": "Implement quality bonuses tied to scrap reduction",
+        "priority": "low"
+    })
+    
+    return recommendations[:6]
+
+
+def get_work_center_recommendations(work_center: str, avg_oee: float, avg_age: float, target_oee: int) -> list:
+    """Generate context-aware recommendations for work center scenario."""
+    recommendations = []
+    
+    if avg_oee < 0.75:
+        recommendations.append({
+            "icon": "🔴",
+            "title": "Critical OEE",
+            "desc": "OEE below 75% - major improvement potential",
+            "priority": "high"
+        })
+        recommendations.append({
+            "icon": "📉",
+            "title": "Identify Six Big Losses",
+            "desc": "Analyze breakdown, setup, idle, speed, defects, startup",
+            "priority": "high"
+        })
+    
+    if avg_age > 12:
+        recommendations.append({
+            "icon": "⚙️",
+            "title": "Aging Equipment",
+            "desc": "Consider capital refresh or rebuild program",
+            "priority": "high"
+        })
+        recommendations.append({
+            "icon": "🔮",
+            "title": "Predictive Maintenance",
+            "desc": "Install sensors for vibration, temperature monitoring",
+            "priority": "medium"
+        })
+    elif avg_age > 8:
+        recommendations.append({
+            "icon": "🛠️",
+            "title": "Enhanced PM Program",
+            "desc": "Increase preventive maintenance frequency",
+            "priority": "medium"
+        })
+    
+    if "Stamping" in work_center:
+        recommendations.append({
+            "icon": "📐",
+            "title": "Tool & Die Program",
+            "desc": "Implement die tracking and wear prediction",
+            "priority": "medium"
+        })
+    elif "Welding" in work_center:
+        recommendations.append({
+            "icon": "⚡",
+            "title": "Weld Parameter Control",
+            "desc": "Real-time monitoring of current, voltage, wire feed",
+            "priority": "medium"
+        })
+    elif "CNC" in work_center:
+        recommendations.append({
+            "icon": "🎯",
+            "title": "Tool Life Management",
+            "desc": "Track tool wear and implement automatic offsets",
+            "priority": "medium"
+        })
+    elif "Injection" in work_center:
+        recommendations.append({
+            "icon": "🌡️",
+            "title": "Process Monitoring",
+            "desc": "Monitor barrel temp, injection pressure, cycle time",
+            "priority": "medium"
+        })
+    
+    recommendations.append({
+        "icon": "👨‍🏫",
+        "title": "Operator Training",
+        "desc": "Certify operators on TPM and quality standards",
+        "priority": "low"
+    })
+    
+    recommendations.append({
+        "icon": "📋",
+        "title": "Standard Work",
+        "desc": "Document and enforce standard operating procedures",
+        "priority": "low"
+    })
+    
+    return recommendations[:6]
+
+
+def get_part_recommendations(num_parts: int, total_cost: float, avg_defect_rate: float, reduction_target: int) -> list:
+    """Generate context-aware recommendations for part scenario."""
+    recommendations = []
+    
+    if avg_defect_rate > 0.05:
+        recommendations.append({
+            "icon": "🔴",
+            "title": "High Defect Rate",
+            "desc": f"Avg {avg_defect_rate*100:.1f}% - root cause investigation needed",
+            "priority": "high"
+        })
+        recommendations.append({
+            "icon": "🔍",
+            "title": "PFMEA Review",
+            "desc": "Update failure modes analysis for high-scrap parts",
+            "priority": "high"
+        })
+    
+    if num_parts >= 5:
+        recommendations.append({
+            "icon": "🎯",
+            "title": "Focus Strategy",
+            "desc": "Consider tackling top 3 parts first for faster wins",
+            "priority": "medium"
+        })
+    
+    if total_cost > 100000:
+        recommendations.append({
+            "icon": "💰",
+            "title": "High-Value Target",
+            "desc": f"${total_cost/1000:.0f}K/month - executive sponsorship recommended",
+            "priority": "high"
+        })
+    
+    if reduction_target >= 50:
+        recommendations.append({
+            "icon": "🔬",
+            "title": "Design Review",
+            "desc": "Consider part redesign or material change",
+            "priority": "medium"
+        })
+    
+    recommendations.append({
+        "icon": "🏭",
+        "title": "Supplier Quality",
+        "desc": "Review incoming inspection and supplier PPM",
+        "priority": "medium"
+    })
+    
+    recommendations.append({
+        "icon": "📊",
+        "title": "SPC Implementation",
+        "desc": "Add statistical process control on critical dimensions",
+        "priority": "medium"
+    })
+    
+    recommendations.append({
+        "icon": "✅",
+        "title": "Error Proofing",
+        "desc": "Implement poka-yoke at key process steps",
+        "priority": "low"
+    })
+    
+    recommendations.append({
+        "icon": "🔄",
+        "title": "8D Follow-Up",
+        "desc": "Review historical 8D reports for these parts",
+        "priority": "low"
+    })
+    
+    return recommendations[:6]
+
+
 def render_plant_scenario(monthly_df: pd.DataFrame, plants: list):
     """Render the plant-level scenario tab."""
     
@@ -446,7 +960,6 @@ def render_plant_scenario(monthly_df: pd.DataFrame, plants: list):
             key="scenario_plant_investment"
         )
         
-        # Calculate metrics for recommendations
         plant_data = monthly_df[monthly_df['plant'] == selected_plant]
         current_annual_cost = plant_data['scrap_cost'].sum() / 3
         annual_savings = current_annual_cost * (reduction_target / 100)
@@ -454,7 +967,6 @@ def render_plant_scenario(monthly_df: pd.DataFrame, plants: list):
         
         st.markdown("---")
         
-        # Recommendations in left column
         recommendations = get_plant_recommendations(
             selected_plant, reduction_target, roi_months, annual_savings
         )
@@ -531,7 +1043,6 @@ def render_plant_scenario(monthly_df: pd.DataFrame, plants: list):
         
         st.plotly_chart(fig, use_container_width=True, key="plant_trajectory_chart")
         
-        # 5-year summary
         roi_pct = ((annual_savings * 5) / investment - 1) * 100 if investment > 0 else 0
         benefit_color = "#10b981" if five_year_savings > 0 else "#ef4444"
         
@@ -596,14 +1107,12 @@ def render_work_center_scenario(wc_df: pd.DataFrame, work_centers: list):
             key="scenario_wc_investment"
         )
         
-        # Get data for recommendations
         wc_data = wc_df[wc_df['work_center'] == selected_wc].copy()
         avg_oee = wc_data['oee'].mean()
         avg_age = wc_data['equipment_age'].mean()
         
         st.markdown("---")
         
-        # Recommendations
         recommendations = get_work_center_recommendations(
             selected_wc, avg_oee, avg_age, target_oee
         )
@@ -703,7 +1212,6 @@ def render_part_scenario(parts_df: pd.DataFrame):
             key="scenario_part_defect"
         )
         
-        # Get data for recommendations
         if selected_parts:
             selected_data = parts_df[parts_df['part_id'].isin(selected_parts)].copy()
             total_cost = selected_data['monthly_scrap_cost'].sum()

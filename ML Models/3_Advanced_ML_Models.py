@@ -1179,3 +1179,266 @@ print("""
    - Each cluster represents a pattern
    - High-cost clusters need immediate attention
 """)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ---
+# MAGIC # 🏢 Model 6: Supplier Reallocation Optimizer
+# MAGIC ---
+# MAGIC 
+# MAGIC **Purpose**: Optimize supplier allocation to minimize scrap while respecting capacity constraints.
+# MAGIC 
+# MAGIC This model supports the **What-If Scenarios** in the Streamlit app by:
+# MAGIC 1. Identifying optimal suppliers for each part category
+# MAGIC 2. Predicting scrap impact of supplier changes
+# MAGIC 3. Recommending allocation shifts based on quality and capacity
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Load Supplier Scenario Data
+
+# COMMAND ----------
+
+# Load supplier scenario data
+supplier_scenario_df = spark.table(f"{FULL_SCHEMA}.supplier_scenario_gold")
+
+# Also get historical supplier-scrap correlation
+supplier_scrap_history = spark.sql(f"""
+    SELECT 
+        supplier_id,
+        supplier_name_lookup as supplier_name,
+        supplier_tier_lookup as tier,
+        AVG(supplier_quality_score) as avg_quality_score,
+        SUM(total_scrap_cost) as total_scrap_cost,
+        SUM(quantity_scrapped) as total_qty_scrapped,
+        COUNT(DISTINCT part_id) as parts_affected,
+        COUNT(DISTINCT plant_id) as plants_served,
+        COUNT(*) as scrap_records
+    FROM {FULL_SCHEMA}.scrap_transactions_silver
+    GROUP BY supplier_id, supplier_name_lookup, supplier_tier_lookup
+""")
+
+print(f"Supplier scenario records: {supplier_scenario_df.count()}")
+print(f"Supplier history records: {supplier_scrap_history.count()}")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Train Scrap Prediction Model for Supplier Changes
+# MAGIC 
+# MAGIC **Goal**: Predict expected scrap cost change when reallocating volume between suppliers.
+
+# COMMAND ----------
+
+# Prepare features for supplier scrap prediction
+supplier_features = supplier_scrap_history.toPandas()
+
+# Calculate scrap rate (scrap per record)
+supplier_features['scrap_rate'] = supplier_features['total_qty_scrapped'] / (supplier_features['scrap_records'] + 1)
+supplier_features['scrap_cost_per_record'] = supplier_features['total_scrap_cost'] / (supplier_features['scrap_records'] + 1)
+
+# Create tier encoding
+tier_map = {'Tier 1': 3, 'Tier 2': 2, 'Tier 3': 1}
+supplier_features['tier_score'] = supplier_features['tier'].map(tier_map).fillna(1)
+
+# Features for prediction
+feature_cols = ['avg_quality_score', 'tier_score', 'parts_affected', 'plants_served']
+target_col = 'scrap_rate'
+
+X = supplier_features[feature_cols].fillna(0)
+y = supplier_features[target_col].fillna(supplier_features[target_col].median())
+
+print(f"Training supplier scrap predictor on {len(X)} suppliers")
+
+# COMMAND ----------
+
+# Train regression model to predict scrap rate based on supplier characteristics
+from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.model_selection import cross_val_score
+import mlflow
+import mlflow.sklearn
+
+with mlflow.start_run(run_name="supplier_scrap_predictor"):
+    # Log parameters
+    mlflow.log_param("model_type", "GradientBoostingRegressor")
+    mlflow.log_param("n_estimators", 100)
+    mlflow.log_param("target", "scrap_rate")
+    mlflow.log_param("n_suppliers", len(X))
+    
+    # Train model
+    supplier_model = GradientBoostingRegressor(
+        n_estimators=100,
+        max_depth=4,
+        learning_rate=0.1,
+        random_state=42
+    )
+    
+    # Cross-validation
+    cv_scores = cross_val_score(supplier_model, X, y, cv=5, scoring='r2')
+    
+    mlflow.log_metric("cv_r2_mean", cv_scores.mean())
+    mlflow.log_metric("cv_r2_std", cv_scores.std())
+    
+    # Fit final model
+    supplier_model.fit(X, y)
+    
+    # Feature importance
+    for feat, imp in zip(feature_cols, supplier_model.feature_importances_):
+        mlflow.log_metric(f"importance_{feat}", imp)
+    
+    # Log model
+    mlflow.sklearn.log_model(supplier_model, "supplier_scrap_predictor")
+    
+    print(f"Supplier Scrap Predictor CV R²: {cv_scores.mean():.3f} ± {cv_scores.std():.3f}")
+    print("\nFeature Importance:")
+    for feat, imp in sorted(zip(feature_cols, supplier_model.feature_importances_), key=lambda x: -x[1]):
+        print(f"  {feat}: {imp:.3f}")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Generate Supplier Reallocation Recommendations
+# MAGIC 
+# MAGIC For each specialization/category, identify optimal supplier and potential reallocations.
+
+# COMMAND ----------
+
+# Get supplier scenario data with all metrics
+supplier_scenario_pd = supplier_scenario_df.toPandas()
+
+# Function to find optimal allocation within a category
+def optimize_category_allocation(category_df):
+    """Find optimal supplier allocation for a category."""
+    
+    if len(category_df) < 2:
+        return None
+    
+    # Score each supplier (higher = better)
+    # Score = quality * (1 - scrap_rate) * available_capacity_factor
+    category_df = category_df.copy()
+    category_df['allocation_score'] = (
+        category_df['quality_score'] * 
+        (1 - category_df['scrap_rate'].clip(0, 0.5)) * 
+        (1 + category_df['available_capacity'].clip(0, 0.5))
+    )
+    
+    # Find best and worst performers
+    best = category_df.loc[category_df['allocation_score'].idxmax()]
+    worst = category_df.loc[category_df['allocation_score'].idxmin()]
+    
+    # Calculate potential savings if we shift 20% from worst to best
+    shift_amount = worst['estimated_annual_spend'] * 0.20 if 'estimated_annual_spend' in category_df.columns else 100000
+    
+    # Scrap savings estimate
+    scrap_reduction = (worst['scrap_rate'] - best['scrap_rate']) * shift_amount
+    
+    return {
+        'category': category_df['specialization'].iloc[0],
+        'best_supplier': best['supplier_name'],
+        'best_quality': best['quality_score'],
+        'best_available_capacity': best['available_capacity'],
+        'worst_supplier': worst['supplier_name'],
+        'worst_quality': worst['quality_score'],
+        'recommended_shift_pct': 20,
+        'estimated_scrap_savings': max(0, scrap_reduction)
+    }
+
+# Generate recommendations by category
+recommendations = []
+for category in supplier_scenario_pd['specialization'].unique():
+    category_df = supplier_scenario_pd[supplier_scenario_pd['specialization'] == category]
+    rec = optimize_category_allocation(category_df)
+    if rec:
+        recommendations.append(rec)
+
+recommendations_df = pd.DataFrame(recommendations)
+print("Supplier Reallocation Recommendations:")
+display(recommendations_df)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Save Supplier Optimization Results
+
+# COMMAND ----------
+
+# Convert to Spark and save
+if len(recommendations_df) > 0:
+    recommendations_spark = spark.createDataFrame(recommendations_df)
+    recommendations_spark = recommendations_spark.withColumn("generated_at", F.current_timestamp())
+    
+    (recommendations_spark
+     .write
+     .mode("overwrite")
+     .saveAsTable(f"{FULL_SCHEMA}.ml_supplier_reallocation_recommendations"))
+    
+    print(f"Saved {len(recommendations_df)} supplier reallocation recommendations")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Create Supplier-Part Allocation Matrix
+# MAGIC 
+# MAGIC For use in what-if scenario analysis - shows which suppliers can produce which parts.
+
+# COMMAND ----------
+
+# Get supplier-part relationships from scrap data
+supplier_part_matrix = spark.sql(f"""
+    SELECT 
+        s.supplier_id,
+        s.supplier_name_lookup as supplier_name,
+        s.supplier_tier_lookup as tier,
+        p.part_category,
+        COUNT(DISTINCT p.part_id) as parts_count,
+        SUM(s.total_scrap_cost) as total_scrap_cost,
+        AVG(s.supplier_quality_score) as avg_quality
+    FROM {FULL_SCHEMA}.scrap_transactions_silver s
+    JOIN {FULL_SCHEMA}.parts_silver p ON s.part_id = p.part_id
+    GROUP BY s.supplier_id, s.supplier_name_lookup, s.supplier_tier_lookup, p.part_category
+    HAVING parts_count >= 2
+    ORDER BY part_category, total_scrap_cost DESC
+""")
+
+# Save matrix
+(supplier_part_matrix
+ .withColumn("generated_at", F.current_timestamp())
+ .write
+ .mode("overwrite")
+ .saveAsTable(f"{FULL_SCHEMA}.ml_supplier_part_capability_matrix"))
+
+print(f"Saved supplier-part capability matrix: {supplier_part_matrix.count()} relationships")
+display(supplier_part_matrix.limit(20))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Log Final Summary with Supplier Optimization
+
+# COMMAND ----------
+
+print("\n" + "=" * 70)
+print("🎯 MODEL 6: SUPPLIER REALLOCATION OPTIMIZER - COMPLETE")
+print("=" * 70)
+print(f"""
+📊 SUPPLIER OPTIMIZATION RESULTS
+   • Suppliers Analyzed: {len(supplier_features)}
+   • Categories with Recommendations: {len(recommendations_df)}
+   • Predictor CV R²: {cv_scores.mean():.3f}
+   
+📈 KEY OUTPUTS
+   • Scrap Rate Predictor Model (in MLflow)
+   • Reallocation Recommendations: {FULL_SCHEMA}.ml_supplier_reallocation_recommendations
+   • Capability Matrix: {FULL_SCHEMA}.ml_supplier_part_capability_matrix
+
+🎯 TOP RECOMMENDATIONS
+""")
+
+# Show top 5 recommendations by savings
+if len(recommendations_df) > 0:
+    top_recs = recommendations_df.nlargest(5, 'estimated_scrap_savings')
+    for _, rec in top_recs.iterrows():
+        print(f"   • {rec['category']}: Shift 20% from {rec['worst_supplier'][:20]} → {rec['best_supplier'][:20]}")
+        print(f"     Estimated Annual Savings: ${rec['estimated_scrap_savings']:,.0f}")

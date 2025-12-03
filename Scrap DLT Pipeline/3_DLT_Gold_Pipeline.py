@@ -1110,3 +1110,356 @@ def kpi_dashboard_gold():
         )
         .withColumn("processed_at", F.current_timestamp())
     )
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ---
+# MAGIC # 🎯 Scenario Analysis Tables
+# MAGIC ---
+# MAGIC 
+# MAGIC Tables designed to support What-If scenario analysis in the Streamlit app.
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 🔧 Scrap by Work Center
+# MAGIC 
+# MAGIC **Purpose**: Work center level aggregations for scenario planning.
+# MAGIC 
+# MAGIC **Includes**: OEE correlation, equipment age, shift breakdown, plant context.
+
+# COMMAND ----------
+
+@dlt.table(
+    name="scrap_by_work_center_gold",
+    comment="Work center level scrap aggregations for scenario analysis",
+    table_properties={
+        "quality": "gold",
+        "pipelines.autoOptimize.managed": "true"
+    }
+)
+def scrap_by_work_center_gold():
+    """
+    Work center aggregations for what-if scenario analysis.
+    
+    Includes equipment OEE and age metrics for maintenance correlation.
+    """
+    return (
+        dlt.read("scrap_transactions_silver")
+        .filter(F.col("work_center_id").isNotNull())
+        .groupBy(
+            "work_center_id",
+            "work_center_name_lookup",
+            "work_center_type_lookup",
+            "plant_id",
+            "plant_name_lookup",
+            "transaction_year",
+            "transaction_month"
+        )
+        .agg(
+            # Volume metrics
+            F.count("*").alias("scrap_records"),
+            F.sum("quantity_scrapped").alias("quantity_scrapped"),
+            F.round(F.sum("total_scrap_cost"), 2).alias("total_scrap_cost"),
+            F.countDistinct("defect_code").alias("unique_defects"),
+            F.countDistinct("part_id").alias("unique_parts"),
+            F.countDistinct("equipment_id").alias("unique_equipment"),
+            
+            # Equipment metrics
+            F.round(F.avg("equipment_age_years"), 1).alias("avg_equipment_age"),
+            F.round(F.avg("equipment_oee"), 3).alias("avg_equipment_oee"),
+            F.round(F.min("equipment_oee"), 3).alias("min_equipment_oee"),
+            
+            # Shift breakdown
+            F.sum(F.when(F.col("shift") == 1, F.col("quantity_scrapped"))
+                  .otherwise(0)).alias("shift_1_qty"),
+            F.sum(F.when(F.col("shift") == 2, F.col("quantity_scrapped"))
+                  .otherwise(0)).alias("shift_2_qty"),
+            F.sum(F.when(F.col("shift") == 3, F.col("quantity_scrapped"))
+                  .otherwise(0)).alias("shift_3_qty"),
+            
+            # Top defect category
+            F.mode("defect_category").alias("top_defect_category"),
+            F.mode("root_cause_category").alias("top_root_cause")
+        )
+        .withColumn("year_month", 
+            F.concat_ws("-", F.col("transaction_year"), 
+                        F.lpad(F.col("transaction_month"), 2, "0"))
+        )
+        # OEE-scrap correlation (higher = worse, meaning low OEE causing more scrap)
+        .withColumn("oee_scrap_correlation",
+            F.round(F.col("quantity_scrapped") * (1 - F.col("avg_equipment_oee")), 2)
+        )
+        .withColumn("processed_at", F.current_timestamp())
+    )
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 🏢 Supplier Scenario Data
+# MAGIC 
+# MAGIC **Purpose**: Comprehensive supplier data for what-if spend/allocation scenarios.
+# MAGIC 
+# MAGIC **Includes**: Annual spend proxy, parts supplied, quality metrics, scrap rates,
+# MAGIC capacity indicators, and alternative supplier identification.
+
+# COMMAND ----------
+
+@dlt.table(
+    name="supplier_scenario_gold",
+    comment="Comprehensive supplier data for what-if scenario analysis",
+    table_properties={
+        "quality": "gold",
+        "pipelines.autoOptimize.managed": "true"
+    }
+)
+def supplier_scenario_gold():
+    """
+    Supplier-level data designed for what-if scenarios.
+    
+    Estimates annual spend based on scrap volume and unit costs.
+    Identifies alternative suppliers in same specialization.
+    """
+    
+    # Get supplier master data
+    suppliers = (
+        spark.table(f"{SOURCE_SCHEMA}.suppliers_silver")
+        .select(
+            "supplier_id",
+            "supplier_name",
+            "supplier_tier",
+            "specialization",
+            "region",
+            "quality_score",
+            "on_time_delivery_rate",
+            "is_preferred"
+        )
+    )
+    
+    # Get supplier scrap totals (latest 12 months)
+    supplier_scrap = (
+        dlt.read("scrap_transactions_silver")
+        .filter(F.col("transaction_date") >= F.add_months(F.current_date(), -12))
+        .groupBy("supplier_id")
+        .agg(
+            F.sum("quantity_scrapped").alias("annual_qty_scrapped"),
+            F.round(F.sum("total_scrap_cost"), 2).alias("annual_scrap_cost"),
+            F.count("*").alias("annual_scrap_records"),
+            F.countDistinct("part_id").alias("parts_supplied"),
+            F.countDistinct("plant_id").alias("plants_served"),
+            F.countDistinct("defect_code").alias("unique_defects"),
+            F.round(F.avg("unit_cost"), 2).alias("avg_unit_cost"),
+            
+            # Sum by disposition
+            F.sum(F.when(F.col("disposition") == "Return to Supplier", F.col("quantity_scrapped"))
+                  .otherwise(0)).alias("returns_to_supplier"),
+                  
+            # Material defects (supplier quality issue)
+            F.sum(F.when(F.col("defect_category") == "Material Defects", 1)
+                  .otherwise(0)).alias("material_defect_count"),
+                  
+            # Volume processed (estimate from scrap rate)
+            # Assuming 3% average scrap rate, estimate total volume
+            F.round(F.sum("quantity_scrapped") / 0.03, 0).alias("estimated_annual_volume")
+        )
+    )
+    
+    # Calculate metrics
+    result = (
+        suppliers
+        .join(supplier_scrap, "supplier_id", "left")
+        .fillna(0, subset=["annual_qty_scrapped", "annual_scrap_cost", "parts_supplied"])
+        
+        # Estimate annual spend (volume * avg unit cost)
+        .withColumn("estimated_annual_spend",
+            F.round(F.col("estimated_annual_volume") * F.coalesce(F.col("avg_unit_cost"), F.lit(50)), 2)
+        )
+        
+        # Scrap rate
+        .withColumn("scrap_rate",
+            F.when(F.col("estimated_annual_volume") > 0,
+                F.round(F.col("annual_qty_scrapped") / F.col("estimated_annual_volume"), 4)
+            ).otherwise(0.03)
+        )
+        
+        # Capacity utilization (estimate based on volume vs. parts)
+        .withColumn("capacity_utilization",
+            F.when(F.col("parts_supplied") > 0,
+                F.least(F.lit(0.95), F.round(0.5 + (F.col("parts_supplied") / 50.0), 2))
+            ).otherwise(0.70)
+        )
+        
+        # Available capacity
+        .withColumn("available_capacity",
+            F.round(1 - F.col("capacity_utilization"), 2)
+        )
+        
+        # Risk score (0-100, lower = better)
+        .withColumn("risk_score",
+            F.round(
+                (1 - F.col("quality_score")) * 50 +  # Quality factor
+                (1 - F.col("on_time_delivery_rate")) * 30 +  # Delivery factor
+                F.when(F.col("supplier_tier") == "Tier 1", 0)
+                 .when(F.col("supplier_tier") == "Tier 2", 10)
+                 .otherwise(20) +  # Tier factor
+                F.when(F.col("material_defect_count") > 10, 15)
+                 .when(F.col("material_defect_count") > 5, 8)
+                 .otherwise(0),  # Material defect factor
+                1
+            )
+        )
+        
+        # Cost index (1.0 = baseline, < 1.0 = cheaper)
+        .withColumn("unit_cost_index",
+            F.when(F.col("supplier_tier") == "Tier 1", 1.0)
+             .when(F.col("supplier_tier") == "Tier 2", 
+                   F.round(0.85 + F.rand() * 0.2, 2))
+             .otherwise(F.round(0.75 + F.rand() * 0.3, 2))
+        )
+        
+        .withColumn("processed_at", F.current_timestamp())
+    )
+    
+    return result
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 📦 Part Scrap Analysis
+# MAGIC 
+# MAGIC **Purpose**: Part-level scrap analysis for targeted improvement scenarios.
+# MAGIC 
+# MAGIC **Includes**: Monthly scrap cost, defect rate, supplier info, critical part flag.
+
+# COMMAND ----------
+
+@dlt.table(
+    name="part_scrap_analysis_gold",
+    comment="Part-level scrap analysis for scenario planning",
+    table_properties={
+        "quality": "gold",
+        "pipelines.autoOptimize.managed": "true"
+    }
+)
+def part_scrap_analysis_gold():
+    """
+    Part-level scrap aggregations for targeted improvement scenarios.
+    
+    Includes defect rates, supplier correlation, and cost impact.
+    """
+    return (
+        dlt.read("scrap_transactions_silver")
+        .groupBy(
+            "part_id",
+            "part_name_lookup",
+            "part_category",
+            "supplier_id",
+            "supplier_name_lookup",
+            "is_critical_part",
+            "transaction_year",
+            "transaction_month"
+        )
+        .agg(
+            # Volume metrics
+            F.count("*").alias("scrap_records"),
+            F.sum("quantity_scrapped").alias("quantity_scrapped"),
+            F.round(F.sum("total_scrap_cost"), 2).alias("total_scrap_cost"),
+            F.round(F.avg("unit_cost"), 2).alias("avg_unit_cost"),
+            
+            # Quality metrics
+            F.countDistinct("defect_code").alias("unique_defects"),
+            F.mode("defect_category").alias("top_defect_category"),
+            F.mode("root_cause_category").alias("top_root_cause"),
+            
+            # Plant spread
+            F.countDistinct("plant_id").alias("plants_affected"),
+            
+            # Equipment correlation
+            F.round(F.avg("equipment_age_years"), 1).alias("avg_equipment_age"),
+            F.round(F.avg("equipment_oee"), 3).alias("avg_equipment_oee"),
+            
+            # Shift patterns
+            F.sum(F.when(F.col("shift") == 3, F.col("quantity_scrapped"))
+                  .otherwise(0)).alias("shift_3_qty"),
+            
+            # Disposition
+            F.sum(F.when(F.col("disposition") == "Rework", F.col("quantity_scrapped"))
+                  .otherwise(0)).alias("rework_qty")
+        )
+        .withColumn("year_month", 
+            F.concat_ws("-", F.col("transaction_year"), 
+                        F.lpad(F.col("transaction_month"), 2, "0"))
+        )
+        # Defect rate (scrap records per unit scrapped, inverted estimate)
+        .withColumn("estimated_defect_rate",
+            F.when(F.col("quantity_scrapped") > 0,
+                F.least(F.lit(0.15), F.round(F.col("scrap_records") / (F.col("quantity_scrapped") / 10 + 100), 4))
+            ).otherwise(0.02)
+        )
+        # Rework potential
+        .withColumn("rework_rate",
+            F.when(F.col("quantity_scrapped") > 0,
+                F.round(F.col("rework_qty") / F.col("quantity_scrapped"), 3)
+            ).otherwise(0)
+        )
+        .withColumn("processed_at", F.current_timestamp())
+    )
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 🏭 Plant Monthly Summary
+# MAGIC 
+# MAGIC **Purpose**: Monthly plant scrap for scenario time series.
+
+# COMMAND ----------
+
+@dlt.table(
+    name="plant_monthly_scenario_gold",
+    comment="Plant monthly scrap for scenario time series analysis",
+    table_properties={
+        "quality": "gold",
+        "pipelines.autoOptimize.managed": "true"
+    }
+)
+def plant_monthly_scenario_gold():
+    """
+    Monthly plant-level data optimized for scenario projections.
+    """
+    return (
+        dlt.read("scrap_transactions_silver")
+        .groupBy(
+            "plant_id",
+            "plant_name_lookup",
+            "plant_city",
+            "plant_country",
+            F.year("transaction_date").alias("year"),
+            F.month("transaction_date").alias("month")
+        )
+        .agg(
+            F.count("*").alias("scrap_records"),
+            F.sum("quantity_scrapped").alias("quantity_scrapped"),
+            F.round(F.sum("total_scrap_cost"), 2).alias("scrap_cost"),
+            F.countDistinct("part_id").alias("unique_parts"),
+            F.countDistinct("supplier_id").alias("unique_suppliers"),
+            F.countDistinct("defect_code").alias("unique_defects"),
+            F.round(F.avg("equipment_oee"), 3).alias("avg_oee"),
+            F.round(F.avg("equipment_age_years"), 1).alias("avg_equipment_age"),
+            
+            # Shift breakdown as ratios
+            F.round(F.sum(F.when(F.col("shift") == 1, F.col("quantity_scrapped")).otherwise(0)) / 
+                    F.sum("quantity_scrapped"), 3).alias("shift_1_ratio"),
+            F.round(F.sum(F.when(F.col("shift") == 2, F.col("quantity_scrapped")).otherwise(0)) / 
+                    F.sum("quantity_scrapped"), 3).alias("shift_2_ratio"),
+            F.round(F.sum(F.when(F.col("shift") == 3, F.col("quantity_scrapped")).otherwise(0)) / 
+                    F.sum("quantity_scrapped"), 3).alias("shift_3_ratio")
+        )
+        .withColumn("month_date", 
+            F.to_date(F.concat_ws("-", F.col("year"), F.lpad(F.col("month"), 2, "0"), F.lit("01")))
+        )
+        .withColumn("year_month", 
+            F.concat_ws("-", F.col("year"), F.lpad(F.col("month"), 2, "0"))
+        )
+        .withColumn("processed_at", F.current_timestamp())
+    )
