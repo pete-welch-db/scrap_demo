@@ -41,7 +41,8 @@
 
 # COMMAND ----------
 
-# MAGIC %pip install prophet
+# MAGIC %pip install prophet mlflow
+
 
 # COMMAND ----------
 
@@ -76,6 +77,9 @@ from prophet import Prophet
 import mlflow
 import mlflow.prophet
 import mlflow.pyfunc
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="mlflow")
+
 from pyspark.sql import functions as F
 from pyspark.sql.window import Window
 from pyspark.sql.types import *
@@ -105,16 +109,16 @@ FORECAST_DAYS = 90  # 3 months forward
 TRAIN_TEST_SPLIT_DAYS = 30  # Hold out last 30 days for validation
 
 # MLflow Configuration
-EXPERIMENT_PATH = "/Shared/scrap_demo/scrap_forecasting"
-
-# Set MLflow experiment - this groups all runs together
-mlflow.set_experiment(EXPERIMENT_PATH)
+# MLflow will use the default notebook experiment when running from Git folders
+# This avoids the error: "Cannot create workspace MLflow experiment in a Git folder"
+# EXPERIMENT_PATH = "/Shared/scrap_demo/scrap_forecasting"
+# mlflow.set_experiment(EXPERIMENT_PATH)  # Removed for Git folder compatibility
 
 print(f"✅ Configuration loaded")
 print(f"   Catalog: {CATALOG}")
 print(f"   Schema: {SCHEMA}")
 print(f"   Forecast Horizon: {FORECAST_DAYS} days")
-print(f"   MLflow Experiment: {EXPERIMENT_PATH}")
+print(f"   MLflow Experiment: Default Notebook Experiment")
 
 # COMMAND ----------
 
@@ -1068,6 +1072,6 @@ print(f"   - {FULL_SCHEMA}.ml_total_forecast_results")
 print(f"   - {FULL_SCHEMA}.ml_plant_forecast_results")
 print(f"   - {FULL_SCHEMA}.ml_supplier_forecast_results")
 print(f"   - {FULL_SCHEMA}.ml_part_forecast_results")
-print(f"\n🔗 MLflow Experiment: {EXPERIMENT_PATH}")
+print(f"\n🔗 MLflow Experiment: Default Notebook Experiment")
 print(f"\n🏆 Registered Model: {CATALOG}.{SCHEMA}.scrap_total_forecast_model")
 print("=" * 70)

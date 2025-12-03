@@ -32,7 +32,7 @@
 
 # COMMAND ----------
 
-# MAGIC %pip install scikit-learn
+# MAGIC %pip install scikit-learn mlflow
 
 # COMMAND ----------
 
@@ -76,6 +76,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 import mlflow
 import mlflow.sklearn
 from mlflow.models.signature import infer_signature
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="mlflow")
 
 # PySpark
 from pyspark.sql import functions as F
@@ -100,8 +102,10 @@ SCHEMA = "scrap_demo"
 FULL_SCHEMA = f"{CATALOG}.{SCHEMA}"
 
 # MLflow Configuration
-EXPERIMENT_PATH = "/Shared/scrap_demo/root_cause_analysis"
-mlflow.set_experiment(EXPERIMENT_PATH)
+# MLflow will use the default notebook experiment when running from Git folders
+# This avoids the error: "Cannot create workspace MLflow experiment in a Git folder"
+# EXPERIMENT_PATH = "/Shared/scrap_demo/root_cause_analysis"
+# mlflow.set_experiment(EXPERIMENT_PATH)  # Removed for Git folder compatibility
 
 # Enable MLflow autologging for sklearn
 mlflow.sklearn.autolog(
@@ -113,7 +117,7 @@ mlflow.sklearn.autolog(
 print(f"✅ Configuration loaded")
 print(f"   Catalog: {CATALOG}")
 print(f"   Schema: {SCHEMA}")
-print(f"   MLflow Experiment: {EXPERIMENT_PATH}")
+print(f"   MLflow Experiment: Default Notebook Experiment")
 print(f"   AutoLogging: Enabled")
 
 # COMMAND ----------
@@ -1183,7 +1187,7 @@ print(f"   TF-IDF Features: {tfidf_matrix.shape[1]:,}")
 print(f"\n📁 Output Tables:")
 print(f"   - {FULL_SCHEMA}.ml_root_cause_validation")
 
-print(f"\n🔗 MLflow Experiment: {EXPERIMENT_PATH}")
+print(f"\n🔗 MLflow Experiment: Default Notebook Experiment")
 
 print("\n" + "=" * 70)
 print("💡 RECOMMENDATIONS:")

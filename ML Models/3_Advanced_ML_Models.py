@@ -26,7 +26,7 @@
 
 # COMMAND ----------
 
-# MAGIC %pip install scikit-learn
+# MAGIC %pip install scikit-learn mlflow
 
 # COMMAND ----------
 
@@ -77,6 +77,8 @@ from sklearn.metrics import (
 import mlflow
 import mlflow.sklearn
 from mlflow.models.signature import infer_signature
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="mlflow")
 
 # PySpark
 from pyspark.sql import functions as F
@@ -101,15 +103,17 @@ SCHEMA = "scrap_demo"
 FULL_SCHEMA = f"{CATALOG}.{SCHEMA}"
 
 # MLflow Configuration
-EXPERIMENT_PATH = "/Shared/scrap_demo/advanced_ml"
-mlflow.set_experiment(EXPERIMENT_PATH)
+# MLflow will use the default notebook experiment when running from Git folders
+# This avoids the error: "Cannot create workspace MLflow experiment in a Git folder"
+# EXPERIMENT_PATH = "/Shared/scrap_demo/advanced_ml"
+# mlflow.set_experiment(EXPERIMENT_PATH)  # Removed for Git folder compatibility
 
 # Enable sklearn autologging
 mlflow.sklearn.autolog(log_input_examples=True, log_model_signatures=True)
 
 print(f"✅ Configuration loaded")
 print(f"   Catalog: {CATALOG}.{SCHEMA}")
-print(f"   MLflow Experiment: {EXPERIMENT_PATH}")
+print(f"   MLflow Experiment: Default Notebook Experiment")
 
 # COMMAND ----------
 
@@ -1156,7 +1160,7 @@ print(f"""
    • Action Patterns: {len(action_patterns):,}
    • Method: Effectiveness-based ranking
 
-🔗 MLflow Experiment: {EXPERIMENT_PATH}
+🔗 MLflow Experiment: Default Notebook Experiment
 """)
 
 print("=" * 70)
