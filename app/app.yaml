@@ -1,0 +1,29 @@
+# Databricks Apps Configuration
+# Deploy this app to Databricks Apps using the CLI or UI
+
+name: scrap-reduction-intelligence
+description: Scrap Reduction Intelligence Platform - Dashboards, What-If Analysis, AI Assistant
+
+# Entry point
+command: ["streamlit", "run", "app.py", "--server.port", "8501", "--server.headless", "true"]
+
+# Environment variables (set in Databricks Apps UI)
+env:
+  - name: DATABRICKS_HOST
+    description: Your Databricks workspace URL
+  - name: DATABRICKS_TOKEN
+    description: Personal access token for authentication
+  - name: DASHBOARD_ID
+    description: ID of the executive dashboard to embed
+
+# Resources
+resources:
+  memory: 2Gi
+  cpu: 1
+
+# Health check
+health_check:
+  path: /_stcore/health
+  interval: 30s
+  timeout: 10s
+

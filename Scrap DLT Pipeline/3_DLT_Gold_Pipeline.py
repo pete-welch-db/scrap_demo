@@ -1,23 +1,66 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # DLT Pipeline - Gold Layer Aggregations
-# MAGIC
-# MAGIC This notebook defines Delta Live Tables (DLT) pipeline for Gold layer aggregations.
-# MAGIC
-# MAGIC **Aggregations:**
-# MAGIC - Scrap summary by time period
-# MAGIC - Scrap by plant/supplier/defect
-# MAGIC - ML feature tables for forecasting
-# MAGIC - 8D analytics
-# MAGIC
-# MAGIC **Source:** `welch.scrap_demo.*_silver`  
-# MAGIC **Target:** `welch.scrap_demo.*_gold`
+# MAGIC # 🏆 DLT Pipeline - Gold Layer Aggregations
+# MAGIC 
+# MAGIC ## Overview
+# MAGIC 
+# MAGIC This notebook defines **Delta Live Tables (DLT)** for the Gold layer - analytics-ready aggregations.
+# MAGIC 
+# MAGIC ## Medallion Architecture Position
+# MAGIC 
+# MAGIC ```
+# MAGIC ┌─────────────────────┐      ┌─────────────────────┐      ┌─────────────────────┐
+# MAGIC │   BRONZE (Raw)      │ ───► │  SILVER (Cleaned)   │ ───► │   GOLD (Analytics)  │
+# MAGIC │                     │      │                     │      │                     │
+# MAGIC └─────────────────────┘      └─────────────────────┘      └─────────────────────┘
+# MAGIC                                                                    ▲
+# MAGIC                                                                    │
+# MAGIC                                                             THIS NOTEBOOK
+# MAGIC ```
+# MAGIC 
+# MAGIC ## Gold Layer Tables
+# MAGIC 
+# MAGIC ### 📊 Aggregation Tables
+# MAGIC | Table | Purpose |
+# MAGIC |-------|---------|
+# MAGIC | `scrap_daily_summary_gold` | Daily scrap metrics for time series |
+# MAGIC | `scrap_monthly_summary_gold` | Monthly trends with MoM changes |
+# MAGIC | `scrap_by_plant_gold` | Plant performance comparison |
+# MAGIC | `scrap_by_supplier_gold` | Supplier quality analysis |
+# MAGIC | `scrap_by_defect_gold` | Pareto analysis of defects |
+# MAGIC | `scrap_by_equipment_gold` | Equipment-related scrap |
+# MAGIC | `eight_d_summary_gold` | 8D report statistics |
+# MAGIC 
+# MAGIC ### 🤖 ML Feature Tables
+# MAGIC | Table | Purpose |
+# MAGIC |-------|---------|
+# MAGIC | `ml_scrap_forecast_features_gold` | Time series forecasting features |
+# MAGIC | `ml_scrap_policy_features_gold` | Scrap reduction policy features |
+# MAGIC | `eight_d_text_analysis_gold` | 8D text prepared for LLM |
+# MAGIC 
+# MAGIC ### 📈 Dashboard Tables
+# MAGIC | Table | Purpose |
+# MAGIC |-------|---------|
+# MAGIC | `kpi_dashboard_gold` | Executive KPI metrics |
+# MAGIC | `supplier_scorecard_gold` | Supplier quality scorecard |
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 📚 Import Libraries
 
 # COMMAND ----------
 
 import dlt
 from pyspark.sql import functions as F
 from pyspark.sql.window import Window
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## ⚙️ Configuration
+
+# COMMAND ----------
 
 # Configuration
 CATALOG = "welch"
@@ -27,19 +70,39 @@ SOURCE_SCHEMA = f"{CATALOG}.{SCHEMA}"
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Daily Scrap Summary Gold
+# MAGIC ---
+# MAGIC # 📊 Time-Based Aggregations
+# MAGIC ---
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 📅 Daily Scrap Summary
+# MAGIC 
+# MAGIC **Purpose**: Aggregate scrap metrics by day for time series analysis and dashboards.
+# MAGIC 
+# MAGIC **Metrics Included**:
+# MAGIC - Total records, quantity, and cost
+# MAGIC - Unique parts and defects
+# MAGIC - Plants and suppliers affected
+# MAGIC - Critical incident counts
 
 # COMMAND ----------
 
 @dlt.table(
     name="scrap_daily_summary_gold",
-    comment="Daily scrap aggregations for dashboards and reporting",
+    comment="Daily scrap aggregations for dashboards and time series analysis",
     table_properties={
         "quality": "gold",
         "pipelines.autoOptimize.managed": "true"
     }
 )
 def scrap_daily_summary_gold():
+    """
+    Daily aggregation of scrap metrics.
+    
+    Used for: Time series visualization, anomaly detection baseline, forecasting.
+    """
     return (
         dlt.read("scrap_transactions_silver")
         .groupBy(
@@ -52,17 +115,26 @@ def scrap_daily_summary_gold():
             "is_weekend"
         )
         .agg(
+            # Volume metrics
             F.count("*").alias("total_scrap_records"),
             F.sum("quantity_scrapped").alias("total_quantity_scrapped"),
             F.round(F.sum("total_scrap_cost"), 2).alias("total_scrap_cost"),
+            
+            # Averages
             F.round(F.avg("quantity_scrapped"), 2).alias("avg_quantity_per_record"),
             F.round(F.avg("total_scrap_cost"), 2).alias("avg_cost_per_record"),
+            
+            # Diversity metrics
             F.countDistinct("part_id").alias("unique_parts_scrapped"),
             F.countDistinct("defect_code").alias("unique_defect_codes"),
             F.countDistinct("plant_id").alias("plants_affected"),
             F.countDistinct("supplier_id").alias("suppliers_involved"),
-            F.sum(F.when(F.col("is_critical_part") == True, F.col("quantity_scrapped")).otherwise(0)).alias("critical_parts_scrapped"),
-            F.sum(F.when(F.col("cost_severity") == "Critical", 1).otherwise(0)).alias("critical_cost_incidents")
+            
+            # Critical metrics
+            F.sum(F.when(F.col("is_critical_part") == True, F.col("quantity_scrapped"))
+                  .otherwise(0)).alias("critical_parts_scrapped"),
+            F.sum(F.when(F.col("cost_severity") == "Critical", 1)
+                  .otherwise(0)).alias("critical_cost_incidents")
         )
         .withColumn("processed_at", F.current_timestamp())
     )
@@ -70,19 +142,28 @@ def scrap_daily_summary_gold():
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Monthly Scrap Summary Gold
+# MAGIC ## 📆 Monthly Scrap Summary
+# MAGIC 
+# MAGIC **Purpose**: Monthly aggregations with month-over-month (MoM) change calculations.
+# MAGIC 
+# MAGIC **Business Value**: Track trends, identify seasonal patterns, support budgeting.
 
 # COMMAND ----------
 
 @dlt.table(
     name="scrap_monthly_summary_gold",
-    comment="Monthly scrap aggregations for trend analysis",
+    comment="Monthly scrap aggregations with MoM trend calculations",
     table_properties={
         "quality": "gold",
         "pipelines.autoOptimize.managed": "true"
     }
 )
 def scrap_monthly_summary_gold():
+    """
+    Monthly aggregation with trend calculations.
+    
+    Includes month-over-month changes for cost and quantity.
+    """
     monthly = (
         dlt.read("scrap_transactions_silver")
         .groupBy(
@@ -105,21 +186,29 @@ def scrap_monthly_summary_gold():
         )
     )
     
-    # Add month-over-month calculations
+    # Window for month-over-month calculations
     window = Window.orderBy("transaction_year", "transaction_month")
     
     return (
         monthly
+        # Previous month values for MoM calculation
         .withColumn("prev_month_cost", F.lag("total_scrap_cost").over(window))
         .withColumn("prev_month_qty", F.lag("total_quantity_scrapped").over(window))
+        
+        # MoM percentage changes
         .withColumn("cost_mom_change", 
-            F.round((F.col("total_scrap_cost") - F.col("prev_month_cost")) / F.col("prev_month_cost") * 100, 2)
+            F.round((F.col("total_scrap_cost") - F.col("prev_month_cost")) / 
+                    F.col("prev_month_cost") * 100, 2)
         )
         .withColumn("qty_mom_change",
-            F.round((F.col("total_quantity_scrapped") - F.col("prev_month_qty")) / F.col("prev_month_qty") * 100, 2)
+            F.round((F.col("total_quantity_scrapped") - F.col("prev_month_qty")) / 
+                    F.col("prev_month_qty") * 100, 2)
         )
+        
+        # Year-month string for easy filtering
         .withColumn("year_month", 
-            F.concat_ws("-", F.col("transaction_year"), F.lpad(F.col("transaction_month"), 2, "0"))
+            F.concat_ws("-", F.col("transaction_year"), 
+                        F.lpad(F.col("transaction_month"), 2, "0"))
         )
         .withColumn("processed_at", F.current_timestamp())
     )
@@ -127,21 +216,35 @@ def scrap_monthly_summary_gold():
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Scrap by Plant Gold
+# MAGIC ---
+# MAGIC # 🏭 Dimension-Based Aggregations
+# MAGIC ---
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 🏢 Scrap by Plant
+# MAGIC 
+# MAGIC **Purpose**: Plant-level performance metrics for comparison and benchmarking.
+# MAGIC 
+# MAGIC **Includes**: Shift breakdown, top defect category, month-over-month view.
 
 # COMMAND ----------
 
 @dlt.table(
     name="scrap_by_plant_gold",
-    comment="Scrap aggregations by plant for performance comparison",
+    comment="Scrap aggregations by plant for performance benchmarking",
     table_properties={
         "quality": "gold",
         "pipelines.autoOptimize.managed": "true"
     }
 )
 def scrap_by_plant_gold():
-    total_cost = dlt.read("scrap_transactions_silver").agg(F.sum("total_scrap_cost")).collect()[0][0]
+    """
+    Plant-level aggregations with shift breakdown.
     
+    Used for: Plant performance dashboards, operations management, shift analysis.
+    """
     return (
         dlt.read("scrap_transactions_silver")
         .groupBy(
@@ -159,16 +262,20 @@ def scrap_by_plant_gold():
             F.countDistinct("defect_code").alias("unique_defects"),
             F.countDistinct("part_id").alias("unique_parts"),
             
-            # Shift analysis
-            F.sum(F.when(F.col("shift") == 1, F.col("quantity_scrapped")).otherwise(0)).alias("shift_1_qty"),
-            F.sum(F.when(F.col("shift") == 2, F.col("quantity_scrapped")).otherwise(0)).alias("shift_2_qty"),
-            F.sum(F.when(F.col("shift") == 3, F.col("quantity_scrapped")).otherwise(0)).alias("shift_3_qty"),
+            # Shift breakdown
+            F.sum(F.when(F.col("shift") == 1, F.col("quantity_scrapped"))
+                  .otherwise(0)).alias("shift_1_qty"),
+            F.sum(F.when(F.col("shift") == 2, F.col("quantity_scrapped"))
+                  .otherwise(0)).alias("shift_2_qty"),
+            F.sum(F.when(F.col("shift") == 3, F.col("quantity_scrapped"))
+                  .otherwise(0)).alias("shift_3_qty"),
             
-            # Top defect category
+            # Top defect
             F.mode("defect_category").alias("top_defect_category")
         )
         .withColumn("year_month", 
-            F.concat_ws("-", F.col("transaction_year"), F.lpad(F.col("transaction_month"), 2, "0"))
+            F.concat_ws("-", F.col("transaction_year"), 
+                        F.lpad(F.col("transaction_month"), 2, "0"))
         )
         .withColumn("processed_at", F.current_timestamp())
     )
@@ -176,19 +283,28 @@ def scrap_by_plant_gold():
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Scrap by Supplier Gold
+# MAGIC ## 🏭 Scrap by Supplier
+# MAGIC 
+# MAGIC **Purpose**: Supplier quality analysis - correlate supplier metrics with scrap.
+# MAGIC 
+# MAGIC **Key Insight**: Compare supplier_quality_score with actual scrap to validate ratings.
 
 # COMMAND ----------
 
 @dlt.table(
     name="scrap_by_supplier_gold",
-    comment="Scrap aggregations by supplier for supplier quality analysis",
+    comment="Scrap aggregations by supplier for quality analysis",
     table_properties={
         "quality": "gold",
         "pipelines.autoOptimize.managed": "true"
     }
 )
 def scrap_by_supplier_gold():
+    """
+    Supplier-level aggregations with quality correlation.
+    
+    Used for: Supplier scorecards, procurement decisions, quality management.
+    """
     return (
         dlt.read("scrap_transactions_silver")
         .groupBy(
@@ -207,15 +323,19 @@ def scrap_by_supplier_gold():
             F.countDistinct("part_id").alias("parts_affected"),
             F.countDistinct("plant_id").alias("plants_affected"),
             
-            # Defect breakdown
-            F.sum(F.when(F.col("defect_category") == "Material Defects", F.col("quantity_scrapped")).otherwise(0)).alias("material_defect_qty"),
-            F.sum(F.when(F.col("defect_category") == "Dimensional", F.col("quantity_scrapped")).otherwise(0)).alias("dimensional_defect_qty"),
+            # Defect type breakdown
+            F.sum(F.when(F.col("defect_category") == "Material Defects", 
+                         F.col("quantity_scrapped")).otherwise(0)).alias("material_defect_qty"),
+            F.sum(F.when(F.col("defect_category") == "Dimensional", 
+                         F.col("quantity_scrapped")).otherwise(0)).alias("dimensional_defect_qty"),
             
             F.mode("defect_category").alias("top_defect_category")
         )
         .withColumn("year_month", 
-            F.concat_ws("-", F.col("transaction_year"), F.lpad(F.col("transaction_month"), 2, "0"))
+            F.concat_ws("-", F.col("transaction_year"), 
+                        F.lpad(F.col("transaction_month"), 2, "0"))
         )
+        # Quality-scrap correlation metric
         .withColumn("quality_scrap_correlation",
             F.round(F.col("quantity_scrapped") / (F.col("supplier_quality_score") + 0.01), 2)
         )
@@ -225,7 +345,11 @@ def scrap_by_supplier_gold():
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Scrap by Defect Code Gold
+# MAGIC ## ⚠️ Scrap by Defect Code
+# MAGIC 
+# MAGIC **Purpose**: Pareto analysis - identify top defects contributing to scrap cost.
+# MAGIC 
+# MAGIC **Includes**: Root cause breakdown, Pareto ranking by month.
 
 # COMMAND ----------
 
@@ -238,6 +362,11 @@ def scrap_by_supplier_gold():
     }
 )
 def scrap_by_defect_gold():
+    """
+    Defect-level aggregations with Pareto ranking.
+    
+    Used for: Quality improvement prioritization, root cause analysis.
+    """
     defect_agg = (
         dlt.read("scrap_transactions_silver")
         .groupBy(
@@ -259,21 +388,26 @@ def scrap_by_defect_gold():
             F.round(F.avg("equipment_age_years"), 1).alias("avg_equipment_age"),
             
             # Root cause breakdown
-            F.sum(F.when(F.col("root_cause_category") == "Machine", 1).otherwise(0)).alias("machine_root_cause_count"),
-            F.sum(F.when(F.col("root_cause_category") == "Material", 1).otherwise(0)).alias("material_root_cause_count"),
-            F.sum(F.when(F.col("root_cause_category") == "Method", 1).otherwise(0)).alias("method_root_cause_count"),
-            F.sum(F.when(F.col("root_cause_category") == "Man", 1).otherwise(0)).alias("man_root_cause_count")
+            F.sum(F.when(F.col("root_cause_category") == "Machine", 1)
+                  .otherwise(0)).alias("machine_root_cause_count"),
+            F.sum(F.when(F.col("root_cause_category") == "Material", 1)
+                  .otherwise(0)).alias("material_root_cause_count"),
+            F.sum(F.when(F.col("root_cause_category") == "Method", 1)
+                  .otherwise(0)).alias("method_root_cause_count"),
+            F.sum(F.when(F.col("root_cause_category") == "Man", 1)
+                  .otherwise(0)).alias("man_root_cause_count")
         )
     )
     
-    # Calculate Pareto ranking within each month
+    # Pareto ranking within each month
     window = Window.partitionBy("transaction_year", "transaction_month").orderBy(F.desc("total_scrap_cost"))
     
     return (
         defect_agg
         .withColumn("cost_rank", F.row_number().over(window))
         .withColumn("year_month", 
-            F.concat_ws("-", F.col("transaction_year"), F.lpad(F.col("transaction_month"), 2, "0"))
+            F.concat_ws("-", F.col("transaction_year"), 
+                        F.lpad(F.col("transaction_month"), 2, "0"))
         )
         .withColumn("processed_at", F.current_timestamp())
     )
@@ -281,7 +415,11 @@ def scrap_by_defect_gold():
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Scrap by Equipment Gold
+# MAGIC ## 🔧 Scrap by Equipment
+# MAGIC 
+# MAGIC **Purpose**: Equipment-related scrap analysis for maintenance prioritization.
+# MAGIC 
+# MAGIC **Includes**: Equipment age buckets, OEE correlation, shift patterns.
 
 # COMMAND ----------
 
@@ -294,6 +432,11 @@ def scrap_by_defect_gold():
     }
 )
 def scrap_by_equipment_gold():
+    """
+    Equipment-level aggregations with age and OEE correlation.
+    
+    Used for: Maintenance planning, equipment replacement decisions.
+    """
     return (
         dlt.read("scrap_transactions_silver")
         .filter(F.col("equipment_id").isNotNull())
@@ -323,17 +466,20 @@ def scrap_by_equipment_gold():
             
             F.mode("defect_category").alias("top_defect_category")
         )
+        # Age categorization
         .withColumn("equipment_age_bucket",
             F.when(F.col("equipment_age_years") <= 5, "New (0-5 yrs)")
             .when(F.col("equipment_age_years") <= 10, "Mid-Life (6-10 yrs)")
             .when(F.col("equipment_age_years") <= 15, "Aging (11-15 yrs)")
             .otherwise("Old (>15 yrs)")
         )
+        # Scrap per OEE point (higher = worse equipment performance)
         .withColumn("scrap_per_oee_point", 
             F.round(F.col("quantity_scrapped") / (F.col("equipment_oee") * 100), 2)
         )
         .withColumn("year_month", 
-            F.concat_ws("-", F.col("transaction_year"), F.lpad(F.col("transaction_month"), 2, "0"))
+            F.concat_ws("-", F.col("transaction_year"), 
+                        F.lpad(F.col("transaction_month"), 2, "0"))
         )
         .withColumn("processed_at", F.current_timestamp())
     )
@@ -341,19 +487,24 @@ def scrap_by_equipment_gold():
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 8D Summary Gold
+# MAGIC ## 📋 8D Summary
+# MAGIC 
+# MAGIC **Purpose**: Aggregate 8D report statistics for quality management.
 
 # COMMAND ----------
 
 @dlt.table(
     name="eight_d_summary_gold",
-    comment="8D report summary statistics",
+    comment="8D report summary statistics by month and dimensions",
     table_properties={
         "quality": "gold",
         "pipelines.autoOptimize.managed": "true"
     }
 )
 def eight_d_summary_gold():
+    """
+    8D report aggregations for quality management dashboards.
+    """
     return (
         dlt.read("eight_d_reports_silver")
         .groupBy(
@@ -374,12 +525,12 @@ def eight_d_summary_gold():
             F.sum(F.when(F.col("is_overdue") == True, 1).otherwise(0)).alias("overdue_count"),
             F.sum(F.when(F.col("is_customer_notified") == True, 1).otherwise(0)).alias("customer_notified_count"),
             F.round(F.avg("root_cause_word_count"), 0).alias("avg_root_cause_words"),
-            
             F.mode("root_cause_category").alias("top_root_cause_category"),
             F.mode("verification_result").alias("most_common_verification_result")
         )
         .withColumn("year_month", 
-            F.concat_ws("-", F.col("year_opened"), F.lpad(F.col("month_opened"), 2, "0"))
+            F.concat_ws("-", F.col("year_opened"), 
+                        F.lpad(F.col("month_opened"), 2, "0"))
         )
         .withColumn("processed_at", F.current_timestamp())
     )
@@ -387,7 +538,23 @@ def eight_d_summary_gold():
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## ML Feature Table - Scrap Forecasting
+# MAGIC ---
+# MAGIC # 🤖 ML Feature Tables
+# MAGIC ---
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 🔮 Scrap Forecasting Features
+# MAGIC 
+# MAGIC **Purpose**: Feature table for time series forecasting models.
+# MAGIC 
+# MAGIC **Features Include**:
+# MAGIC - Lag features (1-day, 7-day)
+# MAGIC - Rolling averages (7, 14, 30 day)
+# MAGIC - Rolling standard deviation (volatility)
+# MAGIC - Seasonal indicators
+# MAGIC - Trend indicators
 
 # COMMAND ----------
 
@@ -402,7 +569,9 @@ def eight_d_summary_gold():
 def ml_scrap_forecast_features_gold():
     """
     Daily feature set for time series forecasting.
+    
     Includes lag features, rolling averages, and seasonal indicators.
+    Used by: Prophet, ARIMA, Neural Network forecasting models.
     """
     daily_base = (
         dlt.read("scrap_transactions_silver")
@@ -415,8 +584,10 @@ def ml_scrap_forecast_features_gold():
             F.countDistinct("part_id").alias("unique_parts"),
             F.round(F.avg("equipment_age_years"), 1).alias("avg_equipment_age"),
             F.round(F.avg("supplier_quality_score"), 3).alias("avg_supplier_quality"),
-            F.sum(F.when(F.col("shift") == 3, F.col("quantity_scrapped")).otherwise(0)).alias("shift_3_qty"),
-            F.sum(F.when(F.col("is_critical_part") == True, 1).otherwise(0)).alias("critical_part_records")
+            F.sum(F.when(F.col("shift") == 3, F.col("quantity_scrapped"))
+                  .otherwise(0)).alias("shift_3_qty"),
+            F.sum(F.when(F.col("is_critical_part") == True, 1)
+                  .otherwise(0)).alias("critical_part_records")
         )
     )
     
@@ -465,7 +636,8 @@ def ml_scrap_forecast_features_gold():
         
         # Trend indicators
         .withColumn("qty_7d_trend", 
-            F.round((F.col("daily_qty") - F.col("qty_rolling_7d_avg")) / (F.col("qty_rolling_7d_avg") + 1) * 100, 2)
+            F.round((F.col("daily_qty") - F.col("qty_rolling_7d_avg")) / 
+                    (F.col("qty_rolling_7d_avg") + 1) * 100, 2)
         )
         
         # Night shift ratio
@@ -479,13 +651,17 @@ def ml_scrap_forecast_features_gold():
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## ML Feature Table - Scrap Reduction Policy
+# MAGIC ## 📉 Scrap Reduction Policy Features
+# MAGIC 
+# MAGIC **Purpose**: Combined scrap and 8D features for policy recommendation ML.
+# MAGIC 
+# MAGIC **Use Case**: Identify which factors lead to scrap reduction success.
 
 # COMMAND ----------
 
 @dlt.table(
     name="ml_scrap_policy_features_gold",
-    comment="Feature table for scrap reduction policy ML models - combines scrap and 8D data",
+    comment="Feature table for scrap reduction policy ML - combines scrap and 8D data",
     table_properties={
         "quality": "gold",
         "pipelines.autoOptimize.managed": "true"
@@ -494,7 +670,8 @@ def ml_scrap_forecast_features_gold():
 def ml_scrap_policy_features_gold():
     """
     Monthly aggregated features combining scrap patterns with 8D effectiveness.
-    Used for identifying scrap reduction policies.
+    
+    Used for: Identifying successful scrap reduction policies, root cause validation.
     """
     
     # Monthly scrap aggregations
@@ -520,20 +697,30 @@ def ml_scrap_policy_features_gold():
             F.round(F.avg("operator_experience_years"), 1).alias("avg_operator_experience"),
             
             # Shift breakdown
-            F.sum(F.when(F.col("shift") == 1, F.col("quantity_scrapped")).otherwise(0)).alias("shift_1_qty"),
-            F.sum(F.when(F.col("shift") == 2, F.col("quantity_scrapped")).otherwise(0)).alias("shift_2_qty"),
-            F.sum(F.when(F.col("shift") == 3, F.col("quantity_scrapped")).otherwise(0)).alias("shift_3_qty"),
+            F.sum(F.when(F.col("shift") == 1, F.col("quantity_scrapped"))
+                  .otherwise(0)).alias("shift_1_qty"),
+            F.sum(F.when(F.col("shift") == 2, F.col("quantity_scrapped"))
+                  .otherwise(0)).alias("shift_2_qty"),
+            F.sum(F.when(F.col("shift") == 3, F.col("quantity_scrapped"))
+                  .otherwise(0)).alias("shift_3_qty"),
             
             # Root cause breakdown
-            F.sum(F.when(F.col("root_cause_category") == "Machine", 1).otherwise(0)).alias("machine_root_cause"),
-            F.sum(F.when(F.col("root_cause_category") == "Material", 1).otherwise(0)).alias("material_root_cause"),
-            F.sum(F.when(F.col("root_cause_category") == "Method", 1).otherwise(0)).alias("method_root_cause"),
-            F.sum(F.when(F.col("root_cause_category") == "Man", 1).otherwise(0)).alias("man_root_cause"),
+            F.sum(F.when(F.col("root_cause_category") == "Machine", 1)
+                  .otherwise(0)).alias("machine_root_cause"),
+            F.sum(F.when(F.col("root_cause_category") == "Material", 1)
+                  .otherwise(0)).alias("material_root_cause"),
+            F.sum(F.when(F.col("root_cause_category") == "Method", 1)
+                  .otherwise(0)).alias("method_root_cause"),
+            F.sum(F.when(F.col("root_cause_category") == "Man", 1)
+                  .otherwise(0)).alias("man_root_cause"),
             
             # Disposition breakdown
-            F.sum(F.when(F.col("disposition") == "Scrap", F.col("quantity_scrapped")).otherwise(0)).alias("final_scrap_qty"),
-            F.sum(F.when(F.col("disposition") == "Rework", F.col("quantity_scrapped")).otherwise(0)).alias("rework_qty"),
-            F.sum(F.when(F.col("disposition") == "Return to Supplier", F.col("quantity_scrapped")).otherwise(0)).alias("supplier_return_qty")
+            F.sum(F.when(F.col("disposition") == "Scrap", F.col("quantity_scrapped"))
+                  .otherwise(0)).alias("final_scrap_qty"),
+            F.sum(F.when(F.col("disposition") == "Rework", F.col("quantity_scrapped"))
+                  .otherwise(0)).alias("rework_qty"),
+            F.sum(F.when(F.col("disposition") == "Return to Supplier", F.col("quantity_scrapped"))
+                  .otherwise(0)).alias("supplier_return_qty")
         )
     )
     
@@ -552,8 +739,10 @@ def ml_scrap_policy_features_gold():
             F.sum(F.when(F.col("status") == "Closed", 1).otherwise(0)).alias("eight_d_closed"),
             F.round(F.avg("days_open"), 1).alias("avg_8d_days_open"),
             F.round(F.avg("total_scrap_cost"), 2).alias("avg_8d_scrap_cost"),
-            F.sum(F.when(F.col("verification_result") == "Effective", 1).otherwise(0)).alias("effective_8d_count"),
-            F.sum(F.when(F.col("is_customer_notified") == True, 1).otherwise(0)).alias("customer_notified_8d")
+            F.sum(F.when(F.col("verification_result") == "Effective", 1)
+                  .otherwise(0)).alias("effective_8d_count"),
+            F.sum(F.when(F.col("is_customer_notified") == True, 1)
+                  .otherwise(0)).alias("customer_notified_8d")
         )
     )
     
@@ -619,7 +808,11 @@ def ml_scrap_policy_features_gold():
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 8D Text Analysis Ready Table
+# MAGIC ## 📝 8D Text Analysis Features
+# MAGIC 
+# MAGIC **Purpose**: Prepare 8D text fields for LLM analysis and summarization.
+# MAGIC 
+# MAGIC **Includes**: Combined text field, word counts, context metadata.
 
 # COMMAND ----------
 
@@ -634,7 +827,9 @@ def ml_scrap_policy_features_gold():
 def eight_d_text_analysis_gold():
     """
     Flattened 8D data optimized for LLM processing.
+    
     Combines root cause and corrective action text with contextual metadata.
+    Used for: RAG systems, text summarization, similarity search.
     """
     return (
         dlt.read("eight_d_reports_silver")
@@ -676,6 +871,7 @@ def eight_d_text_analysis_gold():
             "root_cause_word_count",
             "corrective_action_word_count"
         )
+        # Combined text for embedding/similarity
         .withColumn("combined_analysis_text",
             F.concat_ws("\n\n",
                 F.concat(F.lit("PROBLEM: "), F.col("problem_description")),
@@ -694,7 +890,23 @@ def eight_d_text_analysis_gold():
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Supplier Scorecard Gold
+# MAGIC ---
+# MAGIC # 📈 Dashboard Tables
+# MAGIC ---
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 🏅 Supplier Scorecard
+# MAGIC 
+# MAGIC **Purpose**: Monthly supplier quality scorecard combining scrap and 8D metrics.
+# MAGIC 
+# MAGIC **Scores Include**:
+# MAGIC - Base quality score (from supplier master)
+# MAGIC - Scrap score (inverse of scrap volume)
+# MAGIC - Quality incident score (penalty for material defects)
+# MAGIC - Responsiveness score (8D response time)
+# MAGIC - Overall weighted score and performance tier (A-F)
 
 # COMMAND ----------
 
@@ -708,7 +920,9 @@ def eight_d_text_analysis_gold():
 )
 def supplier_scorecard_gold():
     """
-    Monthly supplier scorecard for quality performance tracking.
+    Monthly supplier scorecard for vendor management.
+    
+    Combines scrap performance with 8D responsiveness for overall scoring.
     """
     
     # Supplier scrap summary
@@ -729,9 +943,10 @@ def supplier_scorecard_gold():
             F.countDistinct("part_id").alias("parts_affected"),
             F.countDistinct("plant_id").alias("plants_affected"),
             F.countDistinct("defect_code").alias("unique_defects"),
-            
-            F.sum(F.when(F.col("defect_category") == "Material Defects", 1).otherwise(0)).alias("material_defects"),
-            F.sum(F.when(F.col("disposition") == "Return to Supplier", F.col("quantity_scrapped")).otherwise(0)).alias("supplier_returns")
+            F.sum(F.when(F.col("defect_category") == "Material Defects", 1)
+                  .otherwise(0)).alias("material_defects"),
+            F.sum(F.when(F.col("disposition") == "Return to Supplier", F.col("quantity_scrapped"))
+                  .otherwise(0)).alias("supplier_returns")
         )
     )
     
@@ -745,7 +960,8 @@ def supplier_scorecard_gold():
         )
         .agg(
             F.count("*").alias("eight_d_issued"),
-            F.sum(F.when(F.col("severity").isin("Critical", "Major"), 1).otherwise(0)).alias("critical_8d"),
+            F.sum(F.when(F.col("severity").isin("Critical", "Major"), 1)
+                  .otherwise(0)).alias("critical_8d"),
             F.round(F.avg("days_open"), 1).alias("avg_8d_response_time")
         )
     )
@@ -755,24 +971,20 @@ def supplier_scorecard_gold():
         .join(supplier_8d, ["supplier_id", "year", "month"], "left")
         .fillna(0, subset=["eight_d_issued", "critical_8d"])
         
-        # Calculate scores
+        # Calculate component scores (0-100 scale)
         .withColumn("scrap_score",
-            F.greatest(
-                F.lit(0),
-                F.round(100 - (F.col("total_qty_scrapped") / 10), 1)
-            )
+            F.greatest(F.lit(0), F.round(100 - (F.col("total_qty_scrapped") / 10), 1))
         )
         .withColumn("quality_incident_score",
-            F.greatest(
-                F.lit(0),
-                F.round(100 - (F.col("material_defects") * 5), 1)
-            )
+            F.greatest(F.lit(0), F.round(100 - (F.col("material_defects") * 5), 1))
         )
         .withColumn("responsiveness_score",
             F.when(F.col("eight_d_issued") > 0,
                 F.greatest(F.lit(0), F.round(100 - F.col("avg_8d_response_time"), 1))
             ).otherwise(100)
         )
+        
+        # Overall weighted score
         .withColumn("overall_score",
             F.round(
                 F.col("supplier_quality_score") * 100 * 0.4 +
@@ -782,6 +994,8 @@ def supplier_scorecard_gold():
                 1
             )
         )
+        
+        # Performance tier
         .withColumn("performance_tier",
             F.when(F.col("overall_score") >= 90, "A - Excellent")
             .when(F.col("overall_score") >= 80, "B - Good")
@@ -789,6 +1003,7 @@ def supplier_scorecard_gold():
             .when(F.col("overall_score") >= 60, "D - Needs Improvement")
             .otherwise("F - Critical")
         )
+        
         .withColumn("year_month", 
             F.concat_ws("-", F.col("year"), F.lpad(F.col("month"), 2, "0"))
         )
@@ -798,7 +1013,14 @@ def supplier_scorecard_gold():
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## KPI Dashboard Gold
+# MAGIC ## 📊 KPI Dashboard
+# MAGIC 
+# MAGIC **Purpose**: Executive-level KPIs aggregated monthly for high-level dashboards.
+# MAGIC 
+# MAGIC **KPIs Include**:
+# MAGIC - Total scrap cost and quantity
+# MAGIC - 8D open/closed/effectiveness rates
+# MAGIC - Critical incident ratios
 
 # COMMAND ----------
 
@@ -812,7 +1034,7 @@ def supplier_scorecard_gold():
 )
 def kpi_dashboard_gold():
     """
-    High-level KPIs aggregated at monthly level.
+    High-level KPIs aggregated monthly for executive dashboards.
     """
     
     scrap_kpis = (
@@ -830,10 +1052,12 @@ def kpi_dashboard_gold():
             F.countDistinct("plant_id").alias("plants_with_scrap"),
             
             # Critical indicators
-            F.sum(F.when(F.col("is_critical_part") == True, F.col("quantity_scrapped")).otherwise(0)).alias("critical_parts_scrapped"),
-            F.sum(F.when(F.col("cost_severity") == "Critical", F.col("total_scrap_cost")).otherwise(0)).alias("critical_cost_incidents_value"),
+            F.sum(F.when(F.col("is_critical_part") == True, F.col("quantity_scrapped"))
+                  .otherwise(0)).alias("critical_parts_scrapped"),
+            F.sum(F.when(F.col("cost_severity") == "Critical", F.col("total_scrap_cost"))
+                  .otherwise(0)).alias("critical_cost_incidents_value"),
             
-            # Average metrics
+            # Averages
             F.round(F.avg("quantity_scrapped"), 2).alias("avg_qty_per_incident"),
             F.round(F.avg("total_scrap_cost"), 2).alias("avg_cost_per_incident"),
             F.round(F.avg("equipment_age_years"), 1).alias("avg_equipment_age"),
@@ -853,7 +1077,8 @@ def kpi_dashboard_gold():
             F.sum(F.when(F.col("severity") == "Critical", 1).otherwise(0)).alias("critical_8d"),
             F.sum(F.when(F.col("is_overdue") == True, 1).otherwise(0)).alias("overdue_8d"),
             F.round(F.avg("days_open"), 1).alias("avg_days_to_close"),
-            F.sum(F.when(F.col("verification_result") == "Effective", 1).otherwise(0)).alias("effective_closures")
+            F.sum(F.when(F.col("verification_result") == "Effective", 1)
+                  .otherwise(0)).alias("effective_closures")
         )
     )
     
@@ -885,4 +1110,3 @@ def kpi_dashboard_gold():
         )
         .withColumn("processed_at", F.current_timestamp())
     )
-

@@ -1,0 +1,24 @@
+# Scrap Reduction Demo App - Dependencies
+# Compatible with Databricks Apps and local deployment
+
+# Core
+streamlit>=1.28.0
+pandas>=1.5.0
+numpy>=1.24.0
+plotly>=5.18.0
+
+# Environment management
+python-dotenv>=1.0.0
+
+# HTTP requests (for Genie API)
+requests>=2.31.0
+
+# Databricks SQL Connection
+databricks-sql-connector>=2.9.0
+
+# Optional: Databricks SDK for advanced features
+# databricks-sdk>=0.12.0
+
+# Optional: For AI features (uncomment when implementing)
+# openai>=1.0.0
+# langchain>=0.1.0
