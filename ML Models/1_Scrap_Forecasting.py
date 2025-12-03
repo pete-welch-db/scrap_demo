@@ -989,15 +989,33 @@ print(f"✅ Saved {total_forecast_spark.count():,} total forecast records")
 # Register the total forecast model to Unity Catalog
 model_name = f"{CATALOG}.{SCHEMA}.scrap_total_forecast_model"
 
+# Create signature for Unity Catalog (required)
+# Prophet expects input with 'ds' column and outputs forecast columns
+from mlflow.models.signature import ModelSignature
+from mlflow.types.schema import Schema, ColSpec
+
+# Define input schema (Prophet expects 'ds' datetime column)
+input_schema = Schema([ColSpec("datetime", "ds")])
+
+# Define output schema (Prophet outputs these columns)
+output_schema = Schema([
+    ColSpec("double", "yhat"),
+    ColSpec("double", "yhat_lower"),
+    ColSpec("double", "yhat_upper")
+])
+
+signature = ModelSignature(inputs=input_schema, outputs=output_schema)
+
 with mlflow.start_run(run_name="register_production_model") as run:
     # Log model info
     mlflow.log_param("registered_model_name", model_name)
     mlflow.log_param("model_type", "Prophet")
     
-    # Register model
+    # Register model with signature (required for Unity Catalog)
     model_info = mlflow.prophet.log_model(
         total_model,
-        "model",
+        artifact_path="model",
+        signature=signature,
         registered_model_name=model_name
     )
     
