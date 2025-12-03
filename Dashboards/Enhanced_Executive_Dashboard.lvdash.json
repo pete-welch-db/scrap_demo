@@ -317,9 +317,9 @@
                   "datasetName": "shift_breakdown",
                   "fields": [
                     {"name": "shift", "expression": "`shift`"},
-                    {"name": "qty_scrapped", "expression": "`quantity_scrapped`"}
+                    {"name": "qty_scrapped", "expression": "SUM(`quantity_scrapped`)"}
                   ],
-                  "disaggregated": true
+                  "disaggregated": false
                 }
               }
             ],
@@ -722,7 +722,7 @@
                   "datasetName": "supplier_tier_scrap",
                   "fields": [
                     {"name": "tier", "expression": "`supplier_tier_lookup`"},
-                    {"name": "total_cost", "expression": "SUM(`total_scrap_cost`)"}
+                    {"name": "total_cost", "expression": "`total_scrap_cost`"}
                   ],
                   "disaggregated": true
                 }
@@ -1309,9 +1309,9 @@
                   "datasetName": "eight_d_severity",
                   "fields": [
                     {"name": "severity", "expression": "`severity`"},
-                    {"name": "scrap_cost", "expression": "`total_scrap_cost`"}
+                    {"name": "scrap_cost", "expression": "SUM(`total_scrap_cost`)"}
                   ],
-                  "disaggregated": true
+                  "disaggregated": false
                 }
               }
             ],
@@ -1339,9 +1339,10 @@
                 "query": {
                   "datasetName": "eight_d_effectiveness",
                   "fields": [
-                    {"name": "verification_result", "expression": "`verification_result`"}
+                    {"name": "verification_result", "expression": "`verification_result`"},
+                    {"name": "count", "expression": "COUNT(*)"}
                   ],
-                  "disaggregated": true
+                  "disaggregated": false
                 }
               }
             ],
@@ -1349,7 +1350,7 @@
               "version": 3,
               "widgetType": "pie",
               "encodings": {
-                "angle": {"fieldName": "verification_result", "displayName": "Count"},
+                "angle": {"fieldName": "count", "displayName": "Count"},
                 "color": {"fieldName": "verification_result", "displayName": "Result"}
               },
               "frame": {
@@ -1700,7 +1701,7 @@
     {
       "name": "ytd_kpis",
       "displayName": "YTD KPIs",
-      "query": "SELECT SUM(total_scrap_cost) as total_scrap_cost, SUM(total_qty_scrapped) as total_qty_scrapped FROM welch.scrap_demo.kpi_dashboard_gold WHERE year = YEAR(CURRENT_DATE())"
+      "query": "SELECT ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost, ROUND(SUM(total_qty_scrapped), 0) as total_qty_scrapped FROM welch.scrap_demo.kpi_dashboard_gold WHERE year = YEAR(CURRENT_DATE())"
     },
     {
       "name": "eight_d_status",
@@ -1720,22 +1721,22 @@
     {
       "name": "plant_ytd_summary",
       "displayName": "Plant YTD Summary",
-      "query": "SELECT plant_name_lookup as plant, SUM(total_scrap_cost) as total_scrap_cost FROM welch.scrap_demo.scrap_by_plant_gold WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY plant_name_lookup"
+      "query": "SELECT plant_name_lookup as plant, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM welch.scrap_demo.scrap_by_plant_gold WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY plant_name_lookup"
     },
     {
       "name": "defect_pareto",
       "displayName": "Defect Pareto",
-      "query": "SELECT defect_category, SUM(total_scrap_cost) as total_scrap_cost FROM welch.scrap_demo.scrap_by_defect_gold WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY defect_category ORDER BY total_scrap_cost DESC LIMIT 10"
+      "query": "SELECT defect_category, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM welch.scrap_demo.scrap_by_defect_gold WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY defect_category ORDER BY total_scrap_cost DESC LIMIT 10"
     },
     {
       "name": "shift_breakdown",
       "displayName": "Shift Breakdown",
-      "query": "SELECT shift, plant_name_lookup as plant, SUM(quantity_scrapped) as quantity_scrapped FROM welch.scrap_demo.scrap_transactions_silver WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY shift, plant_name_lookup"
+      "query": "SELECT shift, plant_name_lookup as plant, ROUND(SUM(quantity_scrapped), 0) as quantity_scrapped FROM welch.scrap_demo.scrap_transactions_silver WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY shift, plant_name_lookup"
     },
     {
       "name": "top_scrap_parts",
       "displayName": "Top Scrap Parts",
-      "query": "SELECT part_id, part_name_lookup, supplier_name_lookup as supplier, plant_name_lookup as plant, SUM(total_scrap_cost) as total_scrap_cost, SUM(quantity_scrapped) as quantity_scrapped FROM welch.scrap_demo.scrap_transactions_silver WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY part_id, part_name_lookup, supplier_name_lookup, plant_name_lookup ORDER BY total_scrap_cost DESC LIMIT 10"
+      "query": "SELECT part_id, part_name_lookup, supplier_name_lookup as supplier, plant_name_lookup as plant, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost, ROUND(SUM(quantity_scrapped), 0) as quantity_scrapped FROM welch.scrap_demo.scrap_transactions_silver WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY part_id, part_name_lookup, supplier_name_lookup, plant_name_lookup ORDER BY total_scrap_cost DESC LIMIT 10"
     },
     {
       "name": "forecast_summary",
@@ -1755,7 +1756,7 @@
     {
       "name": "supplier_forecast",
       "displayName": "Supplier Forecast",
-      "query": "SELECT supplier_name_lookup as supplier, SUM(total_scrap_cost) as total_scrap_cost FROM welch.scrap_demo.scrap_by_supplier_gold WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY supplier_name_lookup ORDER BY total_scrap_cost DESC LIMIT 10"
+      "query": "SELECT supplier_name_lookup as supplier, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM welch.scrap_demo.scrap_by_supplier_gold WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY supplier_name_lookup ORDER BY total_scrap_cost DESC LIMIT 10"
     },
     {
       "name": "seasonal_patterns",
@@ -1780,17 +1781,17 @@
     {
       "name": "supplier_quality_scrap",
       "displayName": "Supplier Quality vs Scrap",
-      "query": "SELECT supplier_name_lookup as supplier, supplier_tier_lookup, AVG(supplier_quality_score) as supplier_quality_score, SUM(total_scrap_cost) as total_scrap_cost FROM welch.scrap_demo.scrap_by_supplier_gold WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY supplier_name_lookup, supplier_tier_lookup"
+      "query": "SELECT supplier_name_lookup as supplier, supplier_tier_lookup, ROUND(AVG(supplier_quality_score), 3) as supplier_quality_score, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM welch.scrap_demo.scrap_by_supplier_gold WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY supplier_name_lookup, supplier_tier_lookup"
     },
     {
       "name": "supplier_tier_scrap",
       "displayName": "Supplier Tier Scrap",
-      "query": "SELECT supplier_tier_lookup, SUM(total_scrap_cost) as total_scrap_cost FROM welch.scrap_demo.scrap_by_supplier_gold WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY supplier_tier_lookup"
+      "query": "SELECT supplier_tier_lookup, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM welch.scrap_demo.scrap_by_supplier_gold WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY supplier_tier_lookup"
     },
     {
       "name": "supplier_scorecard",
       "displayName": "Supplier Scorecard",
-      "query": "SELECT supplier_name_lookup as supplier, supplier_tier_lookup, AVG(supplier_quality_score) as supplier_quality_score, SUM(total_scrap_cost) as total_scrap_cost, COUNT(DISTINCT part_id) as parts_affected FROM welch.scrap_demo.scrap_transactions_silver WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY supplier_name_lookup, supplier_tier_lookup ORDER BY total_scrap_cost DESC LIMIT 15"
+      "query": "SELECT supplier_name_lookup as supplier, supplier_tier_lookup, ROUND(AVG(supplier_quality_score), 3) as supplier_quality_score, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost, COUNT(DISTINCT part_id) as parts_affected FROM welch.scrap_demo.scrap_transactions_silver WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY supplier_name_lookup, supplier_tier_lookup ORDER BY total_scrap_cost DESC LIMIT 15"
     },
     {
       "name": "supplier_recommendations",
@@ -1805,12 +1806,12 @@
     {
       "name": "plant_performance",
       "displayName": "Plant Performance",
-      "query": "SELECT plant_name_lookup as plant, transaction_year as year, SUM(total_scrap_cost) as total_scrap_cost, SUM(quantity_scrapped) as quantity_scrapped FROM welch.scrap_demo.scrap_by_plant_gold WHERE transaction_year >= YEAR(CURRENT_DATE()) - 1 GROUP BY plant_name_lookup, transaction_year"
+      "query": "SELECT plant_name_lookup as plant, transaction_year as year, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost, ROUND(SUM(quantity_scrapped), 0) as quantity_scrapped FROM welch.scrap_demo.scrap_by_plant_gold WHERE transaction_year >= YEAR(CURRENT_DATE()) - 1 GROUP BY plant_name_lookup, transaction_year"
     },
     {
       "name": "work_center_scrap",
       "displayName": "Work Center Scrap",
-      "query": "SELECT work_center_type_lookup, SUM(total_scrap_cost) as total_scrap_cost FROM welch.scrap_demo.scrap_by_work_center_gold WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY work_center_type_lookup ORDER BY total_scrap_cost DESC"
+      "query": "SELECT work_center_type_lookup, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM welch.scrap_demo.scrap_by_work_center_gold WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY work_center_type_lookup ORDER BY total_scrap_cost DESC"
     },
     {
       "name": "equipment_oee_scrap",
@@ -1825,7 +1826,7 @@
     {
       "name": "shift_plant_matrix",
       "displayName": "Shift Plant Matrix",
-      "query": "SELECT plant_name_lookup as plant, shift, SUM(total_scrap_cost) as total_scrap_cost FROM welch.scrap_demo.scrap_transactions_silver WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY plant_name_lookup, shift"
+      "query": "SELECT plant_name_lookup as plant, shift, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM welch.scrap_demo.scrap_transactions_silver WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY plant_name_lookup, shift"
     },
     {
       "name": "plant_monthly",
@@ -1840,7 +1841,7 @@
     {
       "name": "eight_d_closure_rate",
       "displayName": "8D Closure Rate",
-      "query": "SELECT status FROM welch.scrap_demo.eight_d_reports_silver WHERE YEAR(date_opened) = YEAR(CURRENT_DATE())"
+      "query": "SELECT ROUND(SUM(CASE WHEN status = 'Closed' THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 1) as closure_rate FROM welch.scrap_demo.eight_d_reports_silver WHERE YEAR(date_opened) = YEAR(CURRENT_DATE())"
     },
     {
       "name": "eight_d_timing",
@@ -1895,7 +1896,7 @@
     {
       "name": "defect_clusters",
       "displayName": "Defect Clusters",
-      "query": "SELECT defect_category, AVG(total_scrap_cost) as total_scrap_cost, COUNT(*) as record_count FROM welch.scrap_demo.scrap_transactions_silver WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY defect_category"
+      "query": "SELECT defect_category, ROUND(AVG(total_scrap_cost), 2) as total_scrap_cost, COUNT(*) as record_count FROM welch.scrap_demo.scrap_transactions_silver WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY defect_category"
     },
     {
       "name": "recent_anomalies",

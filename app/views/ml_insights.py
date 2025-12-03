@@ -340,8 +340,9 @@ def plot_forecast(df: pd.DataFrame) -> go.Figure:
     
     # Add today marker
     today = pd.Timestamp.now()
-    fig.add_vline(x=today, line_dash="dash", line_color=THEME['warning'], 
-                  annotation_text="Today", annotation_position="top")
+    fig.add_vline(x=today, line_dash="dash", line_color=THEME['warning'])
+    fig.add_annotation(x=today, y=1, yref="paper", text="Today", 
+                       showarrow=False, font=dict(color=THEME['warning']))
     
     fig.update_layout(
         title='Scrap Cost Forecast (3-Month Horizon)',

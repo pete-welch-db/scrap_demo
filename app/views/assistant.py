@@ -53,6 +53,7 @@ def format_genie_response(response: GenieResponse) -> None:
         st.markdown("**💡 Suggested follow-ups:**")
         for q in response.suggested_questions:
             if st.button(f"→ {q}", key=f"suggest_{hash(q)}", use_container_width=True):
+                st.session_state.pending_question = q
                 st.session_state.messages.append({"role": "user", "content": q})
                 st.rerun()
 
@@ -87,6 +88,14 @@ Ask me anything about your scrap data!""",
     if "processing" not in st.session_state:
         st.session_state.processing = False
     
+    if "pending_question" not in st.session_state:
+        st.session_state.pending_question = None
+    
+    # Check for pending question from quick buttons
+    pending_prompt = st.session_state.pending_question
+    if pending_prompt:
+        st.session_state.pending_question = None  # Clear immediately
+    
     # Display chat messages
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
@@ -97,8 +106,12 @@ Ask me anything about your scrap data!""",
                 # Render plain text
                 st.markdown(msg["content"])
     
+    # Get prompt from either chat input or pending question
+    chat_prompt = st.chat_input("Ask about scrap data...", disabled=st.session_state.processing)
+    prompt = pending_prompt or chat_prompt
+    
     # Chat input
-    if prompt := st.chat_input("Ask about scrap data...", disabled=st.session_state.processing):
+    if prompt:
         # Add user message
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
@@ -212,6 +225,8 @@ def render_ai_integrations():
     
     for label, question in quick_questions:
         if st.button(label, key=f"quick_{label}", use_container_width=True):
+            # Set pending question to trigger API call on rerun
+            st.session_state.pending_question = question
             st.session_state.messages.append({"role": "user", "content": question})
             st.rerun()
     

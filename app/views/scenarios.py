@@ -69,19 +69,34 @@ def get_scenario_data():
             })
         
         # Transform work center data  
-        if wc_df is not None:
-            wc_df = wc_df.rename(columns={
-                'work_center_type': 'work_center',
-                'monthly_scrap_cost': 'monthly_scrap_cost',
-                'oee': 'oee'
-            })
-            # Aggregate by work center type and plant
-            wc_df = wc_df.groupby(['work_center', 'plant']).agg({
-                'monthly_scrap_cost': 'mean',
-                'oee': 'mean',
-                'avg_equipment_age': 'mean'
-            }).reset_index()
-            wc_df = wc_df.rename(columns={'avg_equipment_age': 'equipment_age'})
+        if wc_df is not None and len(wc_df) > 0:
+            # Use work_center_type for grouping (different work center types)
+            group_cols = []
+            if 'work_center_type' in wc_df.columns:
+                group_cols.append('work_center_type')
+            if 'plant' in wc_df.columns:
+                group_cols.append('plant')
+            
+            if group_cols:
+                agg_dict = {}
+                if 'monthly_scrap_cost' in wc_df.columns:
+                    agg_dict['monthly_scrap_cost'] = 'mean'
+                if 'oee' in wc_df.columns:
+                    agg_dict['oee'] = 'mean'
+                if 'avg_equipment_age' in wc_df.columns:
+                    agg_dict['avg_equipment_age'] = 'mean'
+                
+                if agg_dict:
+                    wc_df = wc_df.groupby(group_cols).agg(agg_dict).reset_index()
+                    
+            # Rename columns to expected names
+            rename_map = {}
+            if 'work_center_type' in wc_df.columns:
+                rename_map['work_center_type'] = 'work_center'
+            if 'avg_equipment_age' in wc_df.columns:
+                rename_map['avg_equipment_age'] = 'equipment_age'
+            if rename_map:
+                wc_df = wc_df.rename(columns=rename_map)
         
         return monthly_df, parts_df, wc_df, plants, work_centers, True
     
