@@ -1034,6 +1034,9 @@ for _, row in effective_8ds.iterrows():
 
 # COMMAND ----------
 
+# Databricks Foundation Model endpoint
+LLM_ENDPOINT_NAME = "databricks-gpt-5-1"
+
 def analyze_8d_with_llm(eight_d_record: dict) -> dict:
     """
     Use Databricks Foundation Model to analyze an 8D report.
@@ -1082,7 +1085,7 @@ Format your response with clear headers for each section."""
         w = WorkspaceClient()
         
         response = w.serving_endpoints.query(
-            name="databricks-meta-llama-3-1-70b-instruct",
+            name=LLM_ENDPOINT_NAME,
             messages=[
                 ChatMessage(
                     role=ChatMessageRole.USER,
@@ -1109,6 +1112,9 @@ Format your response with clear headers for each section."""
             "status": "error"
         }
 
+print("✅ LLM Analysis function defined successfully")
+print(f"   Using endpoint: {LLM_ENDPOINT_NAME}")
+
 # COMMAND ----------
 
 # MAGIC %md
@@ -1119,6 +1125,8 @@ Format your response with clear headers for each section."""
 # COMMAND ----------
 
 # Get top 5 8Ds by cost impact
+print("📊 Fetching top 5 8D reports by cost impact...")
+
 sample_8ds = (
     eight_d_df
     .orderBy(F.desc("total_scrap_cost"))
@@ -1127,20 +1135,46 @@ sample_8ds = (
     .to_dict("records")
 )
 
-print(f"🤖 Analyzing top 5 8D reports by cost impact...")
+print(f"   Found {len(sample_8ds)} records to analyze")
+
+# Show what we're about to analyze
+print("\n📋 8D Reports to Analyze:")
+print("-" * 70)
+for i, record in enumerate(sample_8ds, 1):
+    print(f"   {i}. {record.get('eight_d_id', 'N/A')} - ${record.get('total_scrap_cost', 0):,.2f}")
+    print(f"      Title: {str(record.get('title', 'N/A'))[:60]}...")
+
+print("\n" + "=" * 70)
+print("🤖 Starting LLM Analysis...")
 print("=" * 70)
 
 llm_analyses = []
 
-for record in sample_8ds:
-    print(f"\n🔄 Analyzing: {record['eight_d_id']} - {record['title'][:50]}...")
-    analysis = analyze_8d_with_llm(record)
-    llm_analyses.append(analysis)
+for i, record in enumerate(sample_8ds, 1):
+    title = str(record.get('title', 'N/A'))[:50]
+    eight_d_id = record.get('eight_d_id', 'Unknown')
     
-    if analysis["status"] == "success":
-        print(f"   ✅ Analysis complete")
-    else:
-        print(f"   ❌ Analysis failed")
+    print(f"\n🔄 [{i}/{len(sample_8ds)}] Analyzing: {eight_d_id}")
+    print(f"   Title: {title}...")
+    
+    try:
+        analysis = analyze_8d_with_llm(record)
+        llm_analyses.append(analysis)
+        
+        if analysis["status"] == "success":
+            print(f"   ✅ Analysis complete")
+        else:
+            print(f"   ❌ Analysis failed: {analysis.get('llm_analysis', 'Unknown error')[:100]}")
+    except Exception as e:
+        print(f"   ❌ Exception during analysis: {str(e)[:100]}")
+        llm_analyses.append({
+            "eight_d_id": eight_d_id,
+            "title": title,
+            "llm_analysis": f"Exception: {str(e)}",
+            "status": "error"
+        })
+
+print(f"\n✅ Analysis complete: {sum(1 for a in llm_analyses if a.get('status') == 'success')}/{len(llm_analyses)} successful")
 
 # COMMAND ----------
 
@@ -1150,12 +1184,21 @@ for record in sample_8ds:
 # COMMAND ----------
 
 # Display LLM analyses
-for analysis in llm_analyses:
-    print("\n" + "=" * 80)
-    print(f"📋 8D ID: {analysis['eight_d_id']}")
-    print(f"   Title: {analysis['title']}")
-    print("-" * 80)
-    print(analysis['llm_analysis'])
+if not llm_analyses:
+    print("⚠️ No analyses to display. Check if the previous cell ran successfully.")
+else:
+    successful = [a for a in llm_analyses if a.get('status') == 'success']
+    failed = [a for a in llm_analyses if a.get('status') != 'success']
+    
+    print(f"📊 Results Summary: {len(successful)} successful, {len(failed)} failed\n")
+    
+    for analysis in llm_analyses:
+        print("\n" + "=" * 80)
+        print(f"📋 8D ID: {analysis.get('eight_d_id', 'N/A')}")
+        print(f"   Title: {analysis.get('title', 'N/A')}")
+        print(f"   Status: {'✅ Success' if analysis.get('status') == 'success' else '❌ Failed'}")
+        print("-" * 80)
+        print(analysis.get('llm_analysis', 'No analysis available'))
 
 # COMMAND ----------
 
