@@ -50,7 +50,7 @@ def load_parts_data() -> Optional[pd.DataFrame]:
     SELECT 
         part_id,
         part_name,
-        part_category,
+        part_category_lookup as part_category,
         unit_cost,
         supplier_id
     FROM {SCHEMA}.parts_silver
@@ -215,7 +215,7 @@ def load_part_scrap_data() -> Optional[pd.DataFrame]:
     SELECT 
         part_id,
         part_name_lookup as part_name,
-        part_category,
+        part_category_lookup as part_category,
         supplier_id,
         supplier_name_lookup as supplier_name,
         is_critical_part,
@@ -229,7 +229,7 @@ def load_part_scrap_data() -> Optional[pd.DataFrame]:
         AVG(avg_equipment_oee) as avg_oee
     FROM {SCHEMA}.part_scrap_analysis_gold
     WHERE transaction_year >= YEAR(CURRENT_DATE()) - 1
-    GROUP BY part_id, part_name_lookup, part_category, supplier_id, supplier_name_lookup, is_critical_part
+    GROUP BY part_id, part_name_lookup, part_category_lookup, supplier_id, supplier_name_lookup, is_critical_part
     ORDER BY monthly_scrap_cost DESC
     LIMIT 100
     """
