@@ -249,14 +249,3 @@ def render_ai_integrations():
         - "Top 10 parts by scrap cost"
         - "Worst performing suppliers"
         """)
-    
-    # Debug mode toggle
-    with st.expander("🔧 Advanced"):
-        debug_mode = st.checkbox("Enable Debug Mode", value=False, key="genie_debug")
-        if "genie_client" in st.session_state:
-            st.session_state.genie_client.debug = debug_mode
-        
-        if st.button("🔄 Reset Connection", key="reset_genie"):
-            if "genie_client" in st.session_state:
-                st.session_state.genie_client.reset_conversation()
-                st.toast("Genie connection reset", icon="✅")

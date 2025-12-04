@@ -21,6 +21,11 @@ from data.connection import run_query
 SCHEMA = databricks_config.full_schema
 
 
+def should_use_mock_data() -> bool:
+    """Check if user explicitly requested mock data."""
+    return st.session_state.get('use_mock_data', False)
+
+
 # =============================================================================
 # Data Loading Functions
 # =============================================================================
@@ -526,15 +531,16 @@ def render_ml_insights_page():
         st.markdown("### 📈 Scrap Cost Forecasting")
         st.markdown("Prophet-based time series models predict scrap costs 3 months into the future.")
         
-        # Try to load live data, fall back to mock
-        try:
-            forecast_df = load_forecast_results()
-            if forecast_df is None or len(forecast_df) == 0:
-                raise Exception("No data")
-            data_source = "🟢 Live Data"
-        except:
+        # Load data based on settings
+        if should_use_mock_data():
             forecast_df = get_mock_forecast_data()
             data_source = "🟡 Demo Data"
+        else:
+            forecast_df = load_forecast_results()
+            if forecast_df is None or len(forecast_df) == 0:
+                st.error("❌ No forecast data available from database.")
+                forecast_df = pd.DataFrame({'forecast_date': [], 'predicted_cost': [], 'lower_bound': [], 'upper_bound': []})
+            data_source = "🟢 Live Data"
         
         st.caption(data_source)
         
@@ -582,14 +588,15 @@ def render_ml_insights_page():
         st.markdown("### 🔍 Root Cause Classification Validation")
         st.markdown("ML model validates Quality team's root cause assignments and flags potential misclassifications.")
         
-        try:
-            rc_df = load_root_cause_validation()
-            if rc_df is None or len(rc_df) == 0:
-                raise Exception("No data")
-            data_source = "🟢 Live Data"
-        except:
+        if should_use_mock_data():
             rc_df = get_mock_root_cause_data()
             data_source = "🟡 Demo Data"
+        else:
+            rc_df = load_root_cause_validation()
+            if rc_df is None or len(rc_df) == 0:
+                st.error("❌ No root cause validation data available from database.")
+                rc_df = get_mock_root_cause_data()  # Need structure for UI
+            data_source = "🟢 Live Data"
         
         st.caption(data_source)
         
@@ -648,14 +655,15 @@ def render_ml_insights_page():
         st.markdown("### ⚠️ Anomaly Detection")
         st.markdown("Isolation Forest algorithm detects unusual scrap patterns requiring attention.")
         
-        try:
-            anomaly_df = load_anomalies()
-            if anomaly_df is None or len(anomaly_df) == 0:
-                raise Exception("No data")
-            data_source = "🟢 Live Data"
-        except:
+        if should_use_mock_data():
             anomaly_df = get_mock_anomaly_data()
             data_source = "🟡 Demo Data"
+        else:
+            anomaly_df = load_anomalies()
+            if anomaly_df is None or len(anomaly_df) == 0:
+                st.error("❌ No anomaly data available from database.")
+                anomaly_df = get_mock_anomaly_data()  # Need structure for UI
+            data_source = "🟢 Live Data"
         
         st.caption(data_source)
         
@@ -709,14 +717,15 @@ def render_ml_insights_page():
         st.markdown("### 🏢 Supplier Risk Scoring")
         st.markdown("Multi-factor risk assessment combining quality, delivery, and financial metrics.")
         
-        try:
-            risk_df = load_supplier_risk()
-            if risk_df is None or len(risk_df) == 0:
-                raise Exception("No data")
-            data_source = "🟢 Live Data"
-        except:
+        if should_use_mock_data():
             risk_df = get_mock_supplier_risk_data()
             data_source = "🟡 Demo Data"
+        else:
+            risk_df = load_supplier_risk()
+            if risk_df is None or len(risk_df) == 0:
+                st.error("❌ No supplier risk data available from database.")
+                risk_df = get_mock_supplier_risk_data()  # Need structure for UI
+            data_source = "🟢 Live Data"
         
         st.caption(data_source)
         
@@ -753,14 +762,15 @@ def render_ml_insights_page():
         st.markdown("### 💡 ML-Powered Recommendations")
         st.markdown("Actionable insights from supplier reallocation optimizer model.")
         
-        try:
-            rec_df = load_reallocation_recommendations()
-            if rec_df is None or len(rec_df) == 0:
-                raise Exception("No data")
-            data_source = "🟢 Live Data"
-        except:
+        if should_use_mock_data():
             rec_df = get_mock_reallocation_data()
             data_source = "🟡 Demo Data"
+        else:
+            rec_df = load_reallocation_recommendations()
+            if rec_df is None or len(rec_df) == 0:
+                st.error("❌ No recommendations data available from database.")
+                rec_df = get_mock_reallocation_data()  # Need structure for UI
+            data_source = "🟢 Live Data"
         
         st.caption(data_source)
         

@@ -112,8 +112,8 @@ def render_dashboard_page():
     # Dashboard section
     st.markdown("### 📈 Dashboard Charts")
     
-    # Info about KPI widgets
-    st.info("💡 **Note:** KPI counter widgets don't render in embedded mode. The metrics above are pulled directly from your data.", icon="ℹ️")
+    # # Info about KPI widgets
+    # st.info("💡 **Note:** KPI counter widgets don't render in embedded mode. The metrics above are pulled directly from your data.", icon="ℹ️")
     
     # Dashboard controls
     dash_col1, dash_col2 = st.columns([3, 1])

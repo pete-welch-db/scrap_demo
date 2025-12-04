@@ -58,6 +58,16 @@ def render_sidebar() -> str:
         
         st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
         
+        # Quick Stats (moved above navigation)
+        st.markdown("### 📈 Quick Stats")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("YTD Scrap", "$4.2M", "-8.3%")
+        with col2:
+            st.metric("Open 8Ds", "47", "-12")
+        
+        st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+        
         # Navigation
         page = st.radio(
             "Navigation",
@@ -67,54 +77,57 @@ def render_sidebar() -> str:
         
         st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
         
-        # Connection Status
-        st.markdown("### 🔌 Connection")
-        db_connected = test_db_connection()
-        
-        if db_connected:
-            st.markdown(
-                '<span class="status-badge connected">✅ Databricks Connected</span>', 
-                unsafe_allow_html=True
-            )
-        else:
-            st.markdown(
-                '<span class="status-badge disconnected">❌ Using Mock Data</span>', 
-                unsafe_allow_html=True
-            )
-        
-        host_display = databricks_config.host[:30] + "..." if len(databricks_config.host) > 30 else databricks_config.host
-        st.markdown(f"""
-        <p style="font-size: 0.7rem; color: #64748b; margin-top: 8px;">
-            Host: <code>{host_display}</code>
-        </p>
-        """, unsafe_allow_html=True)
-        
-        st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
-        
-        # Quick Stats
-        st.markdown("### Quick Stats")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("YTD Scrap", "$4.2M", "-8.3%")
-        with col2:
-            st.metric("Open 8Ds", "47", "-12")
-        
-        st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
-        
-        # Settings
+        # Settings (now includes connection status and debug mode)
         with st.expander("⚙️ Settings"):
-            if st.button("🔄 Refresh Data"):
-                st.cache_data.clear()
-                st.rerun()
+            # Connection Status
+            st.markdown("**🔌 Connection**")
+            db_connected = test_db_connection()
             
-            st.markdown("**Data Source**")
+            if db_connected:
+                st.markdown(
+                    '<span class="status-badge connected">✅ Databricks Connected</span>', 
+                    unsafe_allow_html=True
+                )
+            else:
+                st.markdown(
+                    '<span class="status-badge disconnected">❌ Using Mock Data</span>', 
+                    unsafe_allow_html=True
+                )
+            
+            host_display = databricks_config.host[:30] + "..." if len(databricks_config.host) > 30 else databricks_config.host
+            st.markdown(f"""
+            <p style="font-size: 0.7rem; color: #64748b; margin-top: 4px; margin-bottom: 12px;">
+                Host: <code>{host_display}</code>
+            </p>
+            """, unsafe_allow_html=True)
+            
+            st.markdown("---")
+            
+            # Data Source
+            st.markdown("**📊 Data Source**")
             data_source = st.radio(
                 "Source",
-                ["Auto (DB if available)", "Mock Data Only"],
+                ["Live Data (Database)", "Mock Data Only"],
                 label_visibility="collapsed",
                 key="data_source_setting"
             )
-            st.session_state.data_source = data_source
+            # Set flag for use across the app
+            st.session_state.use_mock_data = (data_source == "Mock Data Only")
+            
+            st.markdown("---")
+            
+            # Debug Mode (for Genie)
+            st.markdown("**🔧 Debug Options**")
+            debug_mode = st.checkbox("Enable Genie Debug Mode", value=False, key="genie_debug_setting")
+            if "genie_client" in st.session_state:
+                st.session_state.genie_client.debug = debug_mode
+            
+            st.markdown("---")
+            
+            # Refresh button
+            if st.button("🔄 Refresh Data", use_container_width=True):
+                st.cache_data.clear()
+                st.rerun()
         
         return page
 
