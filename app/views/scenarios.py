@@ -295,9 +295,16 @@ def get_supplier_data():
         })
         return suppliers_df, True
     
-    # No data from database - show error (don't fall back to mock)
+    # No data from database - return empty DataFrame with required columns
     st.error("❌ Could not load supplier data from database.")
-    return pd.DataFrame(), False
+    empty_df = pd.DataFrame({
+        'id': [], 'name': [], 'tier': [], 'category': [], 'region': [],
+        'quality_score': [], 'on_time_delivery': [], 'parts_supplied': [],
+        'annual_spend': [], 'scrap_cost': [], 'scrap_rate': [],
+        'capacity_util': [], 'available_capacity': [], 'risk_score': [],
+        'unit_cost_index': []
+    })
+    return empty_df, False
 
 
 def _generate_mock_supplier_data():
@@ -539,6 +546,11 @@ def render_supplier_scenario(suppliers_df: pd.DataFrame):
     """Render the supplier what-if scenario tab."""
     
     st.markdown("### Supplier Spend & Allocation Analysis")
+    
+    # Handle empty DataFrame
+    if suppliers_df is None or len(suppliers_df) == 0:
+        st.warning("⚠️ No supplier data available. Enable Mock Data in Settings or check database connection.")
+        return
     
     col1, col2 = st.columns([1, 2])
     

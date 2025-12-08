@@ -540,7 +540,9 @@ def render_ml_insights_page():
             if forecast_df is None or len(forecast_df) == 0:
                 st.error("❌ No forecast data available from database.")
                 forecast_df = pd.DataFrame({'forecast_date': [], 'predicted_cost': [], 'lower_bound': [], 'upper_bound': []})
-            data_source = "🟢 Live Data"
+                data_source = "🔴 No Data"
+            else:
+                data_source = "🟢 Live Data"
         
         st.caption(data_source)
         
@@ -596,7 +598,9 @@ def render_ml_insights_page():
             if rc_df is None or len(rc_df) == 0:
                 st.error("❌ No root cause validation data available from database.")
                 rc_df = get_mock_root_cause_data()  # Need structure for UI
-            data_source = "🟢 Live Data"
+                data_source = "🔴 No Data (using mock structure)"
+            else:
+                data_source = "🟢 Live Data"
         
         st.caption(data_source)
         
@@ -663,7 +667,9 @@ def render_ml_insights_page():
             if anomaly_df is None or len(anomaly_df) == 0:
                 st.error("❌ No anomaly data available from database.")
                 anomaly_df = get_mock_anomaly_data()  # Need structure for UI
-            data_source = "🟢 Live Data"
+                data_source = "🔴 No Data (using mock structure)"
+            else:
+                data_source = "🟢 Live Data"
         
         st.caption(data_source)
         
@@ -725,7 +731,9 @@ def render_ml_insights_page():
             if risk_df is None or len(risk_df) == 0:
                 st.error("❌ No supplier risk data available from database.")
                 risk_df = get_mock_supplier_risk_data()  # Need structure for UI
-            data_source = "🟢 Live Data"
+                data_source = "🔴 No Data (using mock structure)"
+            else:
+                data_source = "🟢 Live Data"
         
         st.caption(data_source)
         
@@ -770,7 +778,9 @@ def render_ml_insights_page():
             if rec_df is None or len(rec_df) == 0:
                 st.error("❌ No recommendations data available from database.")
                 rec_df = get_mock_reallocation_data()  # Need structure for UI
-            data_source = "🟢 Live Data"
+                data_source = "🔴 No Data (using mock structure)"
+            else:
+                data_source = "🟢 Live Data"
         
         st.caption(data_source)
         
