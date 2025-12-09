@@ -1,12 +1,12 @@
 # Databricks notebook source
 # MAGIC %md
 # MAGIC # 🔬 Feature-Based Root Cause Analysis with AutoML
-# MAGIC 
+# MAGIC
 # MAGIC ## Business Objective
-# MAGIC 
+# MAGIC
 # MAGIC This notebook goes **beyond stated root causes** to discover hidden factors driving scrap. Instead of accepting 
 # MAGIC the root cause written in the 8D or transaction, we analyze ALL available features to find the REAL drivers.
-# MAGIC 
+# MAGIC
 # MAGIC ## Key Questions
 # MAGIC | Question | Analysis |
 # MAGIC |----------|----------|
@@ -15,7 +15,7 @@
 # MAGIC | Does equipment age matter? | Correlation & regression |
 # MAGIC | Are supplier issues being hidden? | Controlled experiments |
 # MAGIC | What would happen if...? | What-if scenario simulation |
-# MAGIC 
+# MAGIC
 # MAGIC ## Feature Categories Analyzed
 # MAGIC - **Time**: Shift, day of week, month, weekend, month-end
 # MAGIC - **People**: Operator skill level, experience, training
@@ -23,13 +23,13 @@
 # MAGIC - **Supplier**: Quality score, tier, on-time delivery
 # MAGIC - **Part**: Category, material, criticality, complexity
 # MAGIC - **Process**: Work center type, volume, cycle time
-# MAGIC 
+# MAGIC
 # MAGIC ## ML Approach
 # MAGIC - **Databricks AutoML**: Automated model selection & hyperparameter tuning
 # MAGIC - **SHAP Values**: Feature importance explanations
 # MAGIC - **Interaction Analysis**: Multi-factor dependencies
 # MAGIC - **Causal Inference**: Beyond correlation to causation
-# MAGIC 
+# MAGIC
 # MAGIC ## Output Tables
 # MAGIC - `ml_feature_importance_scores` - Feature importance by model
 # MAGIC - `ml_factor_analysis_results` - Detailed factor contribution analysis
@@ -131,7 +131,7 @@ print(f"📊 Sample Size: {SAMPLE_SIZE:,}")
 
 # MAGIC %md
 # MAGIC ## 📊 Load and Prepare Feature-Rich Dataset
-# MAGIC 
+# MAGIC
 # MAGIC We load the scrap_transactions_silver table which contains ALL the features we need for analysis.
 
 # COMMAND ----------
@@ -214,9 +214,9 @@ scrap_df.printSchema()
 
 # MAGIC %md
 # MAGIC ## 🎯 Model 1: Feature Importance Analysis
-# MAGIC 
+# MAGIC
 # MAGIC **Question: Which factors ACTUALLY drive scrap cost?**
-# MAGIC 
+# MAGIC
 # MAGIC We'll train multiple models and extract feature importance to understand what's really driving scrap.
 
 # COMMAND ----------
@@ -447,21 +447,29 @@ print(f"✅ Saved feature importance to {FULL_SCHEMA}.ml_feature_importance_scor
 
 # MAGIC %md
 # MAGIC ## 🔍 Model 2: SHAP Analysis for Explainability
-# MAGIC 
+# MAGIC
 # MAGIC SHAP (SHapley Additive exPlanations) provides detailed insights into how each feature affects predictions.
 
 # COMMAND ----------
 
-# Train final model for SHAP analysis
-best_model = xgb.XGBRegressor(n_estimators=100, max_depth=6, random_state=RANDOM_STATE, n_jobs=-1)
+# Retrain the model in the current environment
+best_model = xgb.XGBRegressor(
+    n_estimators=100,
+    max_depth=6,
+    random_state=RANDOM_STATE,
+    n_jobs=-1
+)
 best_model.fit(X_train, y_train)
 
 # Calculate SHAP values
 print("📊 Calculating SHAP values (this may take a few minutes)...")
-explainer = shap.TreeExplainer(best_model)
+explainer = shap.TreeExplainer(best_model.get_booster())
 
 # Use a sample for SHAP to save time
-shap_sample = X_test.sample(n=min(1000, len(X_test)), random_state=RANDOM_STATE)
+shap_sample = X_test.sample(
+    n=min(1000, len(X_test)),
+    random_state=RANDOM_STATE
+)
 shap_values = explainer.shap_values(shap_sample)
 
 print("✅ SHAP analysis complete!")
@@ -509,9 +517,9 @@ print(f"✅ Saved SHAP analysis to {FULL_SCHEMA}.ml_shap_analysis")
 
 # MAGIC %md
 # MAGIC ## 🔀 Model 3: Feature Interaction Analysis
-# MAGIC 
+# MAGIC
 # MAGIC **Question: Do features work together to cause scrap?**
-# MAGIC 
+# MAGIC
 # MAGIC Example: Equipment age alone may not cause scrap, but equipment age + inexperienced operator might.
 
 # COMMAND ----------
@@ -580,7 +588,7 @@ print(f"\n✅ Saved interaction analysis to {FULL_SCHEMA}.ml_interaction_effects
 
 # MAGIC %md
 # MAGIC ## 📊 Model 4: Detailed Factor Analysis by Dimension
-# MAGIC 
+# MAGIC
 # MAGIC Analyze each factor category in detail to understand contribution to scrap.
 
 # COMMAND ----------
@@ -737,9 +745,9 @@ print(f"✅ Saved factor analysis to {FULL_SCHEMA}.ml_factor_analysis_results")
 
 # MAGIC %md
 # MAGIC ## 🎯 Model 5: Hidden Root Cause Discovery
-# MAGIC 
+# MAGIC
 # MAGIC **Question: What factors predict scrap BETTER than the stated root cause?**
-# MAGIC 
+# MAGIC
 # MAGIC We compare models that use stated root causes vs. models that use operational factors.
 
 # COMMAND ----------
@@ -851,7 +859,7 @@ print(f"\n✅ Saved hidden root causes to {FULL_SCHEMA}.ml_hidden_root_causes")
 
 # MAGIC %md
 # MAGIC ## 🎮 Model 6: What-If Scenario Simulator
-# MAGIC 
+# MAGIC
 # MAGIC Pre-compute scenarios for the Streamlit app to enable instant what-if analysis.
 
 # COMMAND ----------
@@ -995,7 +1003,7 @@ print(f"✅ Saved what-if scenarios to {FULL_SCHEMA}.ml_whatif_scenarios")
 
 # MAGIC %md
 # MAGIC ## 📋 Summary: Output Tables Created
-# MAGIC 
+# MAGIC
 # MAGIC | Table | Description | Use Case |
 # MAGIC |-------|-------------|----------|
 # MAGIC | `ml_feature_importance_scores` | Feature importance from multiple models | Dashboard: Top factors |
@@ -1040,16 +1048,16 @@ with mlflow.start_run(run_name="production_scenario_model"):
 
 # MAGIC %md
 # MAGIC ## ✅ Notebook Complete
-# MAGIC 
+# MAGIC
 # MAGIC ### Key Findings:
 # MAGIC 1. **Top Factors**: Review `ml_feature_importance_scores` for the real drivers
 # MAGIC 2. **Hidden Causes**: Check `ml_hidden_root_causes` for factors Quality team may be missing
 # MAGIC 3. **Interactions**: See `ml_interaction_effects` for combined effects
 # MAGIC 4. **What-If**: Use `ml_whatif_scenarios` for scenario planning
-# MAGIC 
+# MAGIC
 # MAGIC ### Next Steps:
 # MAGIC 1. Review the hidden root causes with the Quality team
 # MAGIC 2. Implement targeted improvements based on what-if scenarios
 # MAGIC 3. Monitor feature importance trends over time
 # MAGIC 4. Connect scenarios to Streamlit app for interactive analysis
-
+# MAGIC

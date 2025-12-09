@@ -1,12 +1,12 @@
 # Databricks notebook source
 # MAGIC %md
 # MAGIC # 🚀 AutoML Forecasting & Advanced Scenario Planning
-# MAGIC 
+# MAGIC
 # MAGIC ## Business Objective
-# MAGIC 
+# MAGIC
 # MAGIC This notebook leverages **Databricks AutoML** for automated model selection and hyperparameter tuning,
 # MAGIC going beyond Prophet to find the best forecasting model for our scrap data.
-# MAGIC 
+# MAGIC
 # MAGIC ## AutoML Advantages over Manual Modeling
 # MAGIC | Feature | Manual (Prophet) | Databricks AutoML |
 # MAGIC |---------|-----------------|-------------------|
@@ -15,14 +15,14 @@
 # MAGIC | Feature Engineering | Manual | Automated feature generation |
 # MAGIC | Explainability | Limited | Built-in SHAP |
 # MAGIC | Time to Production | Hours | Minutes |
-# MAGIC 
+# MAGIC
 # MAGIC ## Models AutoML Will Test
 # MAGIC - LightGBM, XGBoost, CatBoost
 # MAGIC - Random Forest, Extra Trees
 # MAGIC - ARIMA, Prophet
 # MAGIC - Linear Regression, ElasticNet
 # MAGIC - Decision Tree, Gradient Boosting
-# MAGIC 
+# MAGIC
 # MAGIC ## Output Tables
 # MAGIC - `ml_automl_forecast_results` - Best model forecasts
 # MAGIC - `ml_automl_model_comparison` - Model performance comparison
@@ -36,7 +36,8 @@
 
 # COMMAND ----------
 
-# MAGIC %pip install databricks-automl mlflow[databricks] scikit-learn xgboost lightgbm shap
+# MAGIC %pip
+# MAGIC %pip install 'mlflow[databricks]' scikit-learn xgboost lightgbm shap
 
 # COMMAND ----------
 
@@ -54,6 +55,9 @@ dbutils.library.restartPython()
 
 # COMMAND ----------
 
+# Install MLflow with Databricks extras
+%pip install 'mlflow[databricks]'
+
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
@@ -61,8 +65,8 @@ import json
 import warnings
 warnings.filterwarnings('ignore')
 
-# Databricks AutoML
-from databricks import automl
+# Import automl from mlflow
+from mlflow import automl
 
 # Scikit-learn
 from sklearn.model_selection import train_test_split, TimeSeriesSplit
@@ -174,7 +178,7 @@ print(f"📅 Date range: {forecast_pdf['ds'].min()} to {forecast_pdf['ds'].max()
 
 # MAGIC %md
 # MAGIC ## 🤖 Run Databricks AutoML for Forecasting
-# MAGIC 
+# MAGIC
 # MAGIC AutoML will automatically:
 # MAGIC 1. Try 20+ different algorithms
 # MAGIC 2. Tune hyperparameters
@@ -386,7 +390,7 @@ print(f"✅ Saved AutoML forecasts to {FULL_SCHEMA}.ml_automl_forecast_results")
 
 # MAGIC %md
 # MAGIC ## 📊 Advanced Scenario Simulations
-# MAGIC 
+# MAGIC
 # MAGIC Use the trained model to simulate various operational scenarios.
 
 # COMMAND ----------
@@ -535,7 +539,7 @@ print(f"✅ Saved scenario simulations to {FULL_SCHEMA}.ml_scenario_simulations"
 
 # MAGIC %md
 # MAGIC ## 📈 Sensitivity Analysis
-# MAGIC 
+# MAGIC
 # MAGIC Understand how sensitive scrap cost is to changes in each factor.
 
 # COMMAND ----------
@@ -632,7 +636,7 @@ print(f"✅ Saved sensitivity analysis to {FULL_SCHEMA}.ml_sensitivity_analysis"
 
 # MAGIC %md
 # MAGIC ## 📋 Summary: Tables Created
-# MAGIC 
+# MAGIC
 # MAGIC | Table | Description | Use Case |
 # MAGIC |-------|-------------|----------|
 # MAGIC | `ml_automl_model_comparison` | Performance of all models tested | Model selection |
@@ -671,14 +675,14 @@ with mlflow.start_run(run_name="automl_best_model_registration"):
 
 # MAGIC %md
 # MAGIC ## ✅ Notebook Complete
-# MAGIC 
+# MAGIC
 # MAGIC ### Key Results:
 # MAGIC 1. **AutoML** tested 20+ models and selected the best performer
 # MAGIC 2. **Scenarios** pre-computed for instant what-if analysis
 # MAGIC 3. **Sensitivity** analysis shows which factors have most impact
-# MAGIC 
+# MAGIC
 # MAGIC ### Use in Streamlit App:
 # MAGIC - Query `ml_scenario_simulations` for what-if dropdown
 # MAGIC - Query `ml_sensitivity_analysis` for impact sliders
 # MAGIC - Query `ml_automl_forecast_results` for forecast charts
-
+# MAGIC
