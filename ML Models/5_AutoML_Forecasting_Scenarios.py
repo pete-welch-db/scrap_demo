@@ -37,7 +37,8 @@
 # COMMAND ----------
 
 # MAGIC %pip
-# MAGIC %pip install 'mlflow[databricks]' scikit-learn xgboost lightgbm shap
+# MAGIC # %pip install 'mlflow[databricks]' scikit-learn xgboost lightgbm shap
+# MAGIC # %pip install 'mlflow[databricks]' databricks-automl-runtime
 
 # COMMAND ----------
 
@@ -55,8 +56,7 @@ dbutils.library.restartPython()
 
 # COMMAND ----------
 
-# Install MLflow with Databricks extras
-%pip install 'mlflow[databricks]'
+# Install required packages
 
 import pandas as pd
 import numpy as np
@@ -65,8 +65,9 @@ import json
 import warnings
 warnings.filterwarnings('ignore')
 
-# Import automl from mlflow
-from mlflow import automl
+# Import Databricks AutoML
+# import databricks.automl as automl
+from databricks import automl
 
 # Scikit-learn
 from sklearn.model_selection import train_test_split, TimeSeriesSplit
@@ -93,10 +94,15 @@ import seaborn as sns
 
 # COMMAND ----------
 
-# Unity Catalog Configuration
-CATALOG = "welch"
-SCHEMA = "scrap_demo"
+# Unity Catalog Configuration - Use widget parameters from job, with defaults for interactive use
+dbutils.widgets.text("catalog", "scrap_catalog", "Catalog Name")
+dbutils.widgets.text("schema", "scrap_demo", "Schema Name")
+
+CATALOG = dbutils.widgets.get("catalog")
+SCHEMA = dbutils.widgets.get("schema")
 FULL_SCHEMA = f"{CATALOG}.{SCHEMA}"
+
+print(f"Using catalog: {CATALOG}, schema: {SCHEMA}")
 
 # AutoML Configuration
 AUTOML_TIMEOUT_MINUTES = 30  # Time for AutoML to run
@@ -105,6 +111,34 @@ FORECAST_HORIZON_DAYS = 90  # 3-month forecast
 print(f"📍 Target Schema: {FULL_SCHEMA}")
 print(f"⏱️ AutoML Timeout: {AUTOML_TIMEOUT_MINUTES} minutes")
 print(f"📅 Forecast Horizon: {FORECAST_HORIZON_DAYS} days")
+
+# COMMAND ----------
+
+# Helper function to check if table exists
+def table_exists(table_name):
+    try:
+        spark.table(table_name)
+        return True
+    except Exception:
+        return False
+
+# Validate required tables exist
+required_tables = [f"{FULL_SCHEMA}.scrap_transactions_silver"]
+missing_tables = [t for t in required_tables if not table_exists(t)]
+
+if missing_tables:
+    error_msg = f"""
+    ❌ Missing required tables: {missing_tables}
+    
+    Please run the following first:
+    1. Setup job (scrap_setup_job) - Creates bronze tables
+    2. DLT Pipeline - Creates silver tables from bronze
+    
+    Then re-run this ML training notebook.
+    """
+    raise Exception(error_msg)
+
+print(f"✅ All required tables exist in {FULL_SCHEMA}")
 
 # COMMAND ----------
 
@@ -317,8 +351,7 @@ axes[1].set_title('Prediction Residuals (Actual - Predicted)')
 axes[1].grid(True, alpha=0.3)
 
 plt.tight_layout()
-plt.savefig('/tmp/automl_forecast.png', dpi=150, bbox_inches='tight')
-mlflow.log_artifact('/tmp/automl_forecast.png')
+mlflow.log_figure(fig, "automl_forecast.png")
 plt.show()
 
 # COMMAND ----------
@@ -617,8 +650,7 @@ for i, (factor_name, color) in enumerate(zip(sens_df['factor'].unique(), colors)
 axes[-1].axis('off')
 
 plt.tight_layout()
-plt.savefig('/tmp/sensitivity_analysis.png', dpi=150, bbox_inches='tight')
-mlflow.log_artifact('/tmp/sensitivity_analysis.png')
+mlflow.log_figure(fig, "sensitivity_analysis.png")
 plt.show()
 
 # COMMAND ----------

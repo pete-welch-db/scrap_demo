@@ -580,7 +580,7 @@ def render_ml_insights_page():
             **Training Data:** 3 years of historical scrap data  
             **Seasonality:** Yearly, Weekly, Holiday effects  
             **Forecast Horizon:** 90 days  
-            **Registered Model:** `welch.scrap_demo.scrap_total_forecast_model`
+            **Registered Model:** `scrap_catalog.scrap_demo.scrap_total_forecast_model`
             """)
     
     # =========================================================================
@@ -857,11 +857,11 @@ def render_ml_insights_page():
             
             | Model | Purpose | Status |
             |-------|---------|--------|
-            | `welch.scrap_demo.scrap_total_forecast_model` | Time series forecasting | ✅ Production |
-            | `welch.scrap_demo.root_cause_classifier` | Root cause prediction | ✅ Production |
-            | `welch.scrap_demo.anomaly_detector` | Anomaly detection | ✅ Production |
-            | `welch.scrap_demo.supplier_risk_scorer` | Risk assessment | ✅ Production |
-            | `welch.scrap_demo.supplier_reallocation_optimizer` | Reallocation recommendations | ✅ Production |
+            | `scrap_catalog.scrap_demo.scrap_total_forecast_model` | Time series forecasting | ✅ Production |
+            | `scrap_catalog.scrap_demo.root_cause_classifier` | Root cause prediction | ✅ Production |
+            | `scrap_catalog.scrap_demo.anomaly_detector` | Anomaly detection | ✅ Production |
+            | `scrap_catalog.scrap_demo.supplier_risk_scorer` | Risk assessment | ✅ Production |
+            | `scrap_catalog.scrap_demo.supplier_reallocation_optimizer` | Reallocation recommendations | ✅ Production |
             
             **MLflow Experiment:** Default Notebook Experiment (Git folder)
             """)

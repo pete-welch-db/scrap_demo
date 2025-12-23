@@ -99,10 +99,15 @@ import os
 
 # COMMAND ----------
 
-# Unity Catalog Configuration
-CATALOG = "welch"
-SCHEMA = "scrap_demo"
+# Unity Catalog Configuration - Use widget parameters from job, with defaults for interactive use
+dbutils.widgets.text("catalog", "scrap_catalog", "Catalog Name")
+dbutils.widgets.text("schema", "scrap_demo", "Schema Name")
+
+CATALOG = dbutils.widgets.get("catalog")
+SCHEMA = dbutils.widgets.get("schema")
 FULL_SCHEMA = f"{CATALOG}.{SCHEMA}"
+
+print(f"Using catalog: {CATALOG}, schema: {SCHEMA}")
 
 # Forecasting Configuration
 FORECAST_DAYS = 90  # 3 months forward
@@ -129,6 +134,34 @@ print(f"   MLflow Experiment: Default Notebook Experiment")
 # MAGIC - Cleaned and validated data
 # MAGIC - Enriched with dimension lookups
 # MAGIC - Standardized data types
+
+# COMMAND ----------
+
+# Helper function to check if table exists
+def table_exists(table_name):
+    try:
+        spark.table(table_name)
+        return True
+    except Exception:
+        return False
+
+# Validate required tables exist
+required_tables = [f"{FULL_SCHEMA}.scrap_transactions_silver"]
+missing_tables = [t for t in required_tables if not table_exists(t)]
+
+if missing_tables:
+    error_msg = f"""
+    ❌ Missing required tables: {missing_tables}
+    
+    Please run the following first:
+    1. Setup job (scrap_setup_job) - Creates bronze tables
+    2. DLT Pipeline - Creates silver tables from bronze
+    
+    Then re-run this ML training notebook.
+    """
+    raise Exception(error_msg)
+
+print(f"✅ All required tables exist in {FULL_SCHEMA}")
 
 # COMMAND ----------
 
@@ -1046,7 +1079,7 @@ with mlflow.start_run(run_name="register_production_model") as run:
 # MAGIC            SUM(predicted_cost) as total_predicted,
 # MAGIC            SUM(lower_bound) as total_lower,
 # MAGIC            SUM(upper_bound) as total_upper
-# MAGIC     FROM welch.scrap_demo.ml_plant_forecast_results
+# MAGIC     FROM scrap_catalog.scrap_demo.ml_plant_forecast_results
 # MAGIC     WHERE forecast_date <= DATE_ADD(CURRENT_DATE(), 30)
 # MAGIC     GROUP BY entity_name
 # MAGIC ),
@@ -1055,7 +1088,7 @@ with mlflow.start_run(run_name="register_production_model") as run:
 # MAGIC            SUM(predicted_cost) as total_predicted,
 # MAGIC            SUM(lower_bound) as total_lower,
 # MAGIC            SUM(upper_bound) as total_upper
-# MAGIC     FROM welch.scrap_demo.ml_supplier_forecast_results
+# MAGIC     FROM scrap_catalog.scrap_demo.ml_supplier_forecast_results
 # MAGIC     WHERE forecast_date <= DATE_ADD(CURRENT_DATE(), 30)
 # MAGIC     GROUP BY entity_name
 # MAGIC )

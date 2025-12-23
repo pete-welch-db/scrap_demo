@@ -113,10 +113,15 @@ import seaborn as sns
 
 # COMMAND ----------
 
-# Unity Catalog Configuration
-CATALOG = "welch"
-SCHEMA = "scrap_demo"
+# Unity Catalog Configuration - Use widget parameters from job, with defaults for interactive use
+dbutils.widgets.text("catalog", "scrap_catalog", "Catalog Name")
+dbutils.widgets.text("schema", "scrap_demo", "Schema Name")
+
+CATALOG = dbutils.widgets.get("catalog")
+SCHEMA = dbutils.widgets.get("schema")
 FULL_SCHEMA = f"{CATALOG}.{SCHEMA}"
+
+print(f"Using catalog: {CATALOG}, schema: {SCHEMA}")
 
 # Analysis Configuration
 SAMPLE_SIZE = 50000  # For faster experimentation
@@ -126,6 +131,34 @@ CV_FOLDS = 5
 
 print(f"📍 Target Schema: {FULL_SCHEMA}")
 print(f"📊 Sample Size: {SAMPLE_SIZE:,}")
+
+# COMMAND ----------
+
+# Helper function to check if table exists
+def table_exists(table_name):
+    try:
+        spark.table(table_name)
+        return True
+    except Exception:
+        return False
+
+# Validate required tables exist
+required_tables = [f"{FULL_SCHEMA}.scrap_transactions_silver"]
+missing_tables = [t for t in required_tables if not table_exists(t)]
+
+if missing_tables:
+    error_msg = f"""
+    ❌ Missing required tables: {missing_tables}
+    
+    Please run the following first:
+    1. Setup job (scrap_setup_job) - Creates bronze tables
+    2. DLT Pipeline - Creates silver tables from bronze
+    
+    Then re-run this ML training notebook.
+    """
+    raise Exception(error_msg)
+
+print(f"✅ All required tables exist in {FULL_SCHEMA}")
 
 # COMMAND ----------
 
@@ -422,8 +455,7 @@ axes[1].pie(category_importance, labels=category_importance.index, autopct='%1.1
 axes[1].set_title('Importance by Category')
 
 plt.tight_layout()
-plt.savefig('/tmp/feature_importance.png', dpi=150, bbox_inches='tight')
-mlflow.log_artifact('/tmp/feature_importance.png')
+mlflow.log_figure(fig, "feature_importance.png")
 plt.show()
 
 # COMMAND ----------
@@ -452,8 +484,11 @@ print(f"✅ Saved feature importance to {FULL_SCHEMA}.ml_feature_importance_scor
 
 # COMMAND ----------
 
-# Retrain the model in the current environment
-best_model = xgb.XGBRegressor(
+# Retrain using RandomForest for better SHAP compatibility
+# (XGBoost + SHAP can have version compatibility issues)
+from sklearn.ensemble import RandomForestRegressor
+
+best_model = RandomForestRegressor(
     n_estimators=100,
     max_depth=6,
     random_state=RANDOM_STATE,
@@ -463,13 +498,15 @@ best_model.fit(X_train, y_train)
 
 # Calculate SHAP values
 print("📊 Calculating SHAP values (this may take a few minutes)...")
-explainer = shap.TreeExplainer(best_model.get_booster())
 
 # Use a sample for SHAP to save time
 shap_sample = X_test.sample(
     n=min(1000, len(X_test)),
     random_state=RANDOM_STATE
 )
+
+# TreeExplainer works reliably with sklearn RandomForest
+explainer = shap.TreeExplainer(best_model)
 shap_values = explainer.shap_values(shap_sample)
 
 print("✅ SHAP analysis complete!")
@@ -485,8 +522,7 @@ print("✅ SHAP analysis complete!")
 fig, ax = plt.subplots(figsize=(12, 10))
 shap.summary_plot(shap_values, shap_sample, feature_names=feature_cols, show=False)
 plt.tight_layout()
-plt.savefig('/tmp/shap_summary.png', dpi=150, bbox_inches='tight')
-mlflow.log_artifact('/tmp/shap_summary.png')
+mlflow.log_figure(fig, "shap_summary.png")
 plt.show()
 
 # COMMAND ----------
@@ -1021,9 +1057,12 @@ print(f"✅ Saved what-if scenarios to {FULL_SCHEMA}.ml_whatif_scenarios")
 # COMMAND ----------
 
 # Register best model to MLflow
+# End any active runs first
+mlflow.end_run()
+
 with mlflow.start_run(run_name="production_scenario_model"):
-    # Log model
-    signature = infer_signature(X_train, model_operational.predict(X_train))
+    # Log model (use X_train_ops since model_operational was trained on operational features)
+    signature = infer_signature(X_train_ops, model_operational.predict(X_train_ops))
     mlflow.sklearn.log_model(
         model_operational,
         "scrap_predictor",

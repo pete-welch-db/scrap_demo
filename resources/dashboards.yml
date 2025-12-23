@@ -1,0 +1,22 @@
+# Lakeview Dashboard Configuration
+# =================================
+# Deploys AI/BI dashboards to Databricks
+# Note: Dashboard requires SQL Warehouse ID. Set via DATABRICKS_WAREHOUSE_ID env var
+# or override with: databricks bundle deploy --var="warehouse_id=<your-id>"
+
+resources:
+  dashboards:
+    # ============================================
+    # Executive Scrap Dashboard
+    # ============================================
+    executive_scrap_dashboard:
+      display_name: "[${bundle.target}] Executive Scrap Dashboard"
+      
+      # Path to the dashboard definition file
+      file_path: ../Dashboards/Executive_Scrap_Dashboard.lvdash.json
+      
+      # Warehouse for dashboard queries
+      warehouse_id: ${var.warehouse_id}
+      
+      # Embed credentials for shared viewing
+      embed_credentials: true

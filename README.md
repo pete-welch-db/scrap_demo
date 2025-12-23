@@ -155,7 +155,7 @@ GENIE_SPACE_ID=01f0d05d42ed11eeae85802c1d5bcccd
 ```python
 # Run in Databricks notebook
 # Notebook: Setup and Bronze Create/0_Setup_and_Data_Model.py
-# Creates catalog/schema: welch.scrap_demo
+# Creates catalog/schema: scrap_catalog.scrap_demo
 ```
 
 ### 2. Generate Bronze Data

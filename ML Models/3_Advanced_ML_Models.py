@@ -97,10 +97,15 @@ import seaborn as sns
 
 # COMMAND ----------
 
-# Unity Catalog Configuration
-CATALOG = "welch"
-SCHEMA = "scrap_demo"
+# Unity Catalog Configuration - Use widget parameters from job, with defaults for interactive use
+dbutils.widgets.text("catalog", "scrap_catalog", "Catalog Name")
+dbutils.widgets.text("schema", "scrap_demo", "Schema Name")
+
+CATALOG = dbutils.widgets.get("catalog")
+SCHEMA = dbutils.widgets.get("schema")
 FULL_SCHEMA = f"{CATALOG}.{SCHEMA}"
+
+print(f"Using catalog: {CATALOG}, schema: {SCHEMA}")
 
 # MLflow Configuration
 # MLflow will use the default notebook experiment when running from Git folders
@@ -128,6 +133,40 @@ print(f"   MLflow Experiment: Default Notebook Experiment")
 # MAGIC ## Load All Required Tables
 # MAGIC 
 # MAGIC Load scrap transactions, equipment, suppliers, and 8D reports from Silver layer.
+
+# COMMAND ----------
+
+# Helper function to check if table exists
+def table_exists(table_name):
+    try:
+        spark.table(table_name)
+        return True
+    except Exception:
+        return False
+
+# Validate required tables exist
+required_tables = [
+    f"{FULL_SCHEMA}.scrap_transactions_silver",
+    f"{FULL_SCHEMA}.equipment_silver",
+    f"{FULL_SCHEMA}.suppliers_silver",
+    f"{FULL_SCHEMA}.eight_d_reports_silver",
+    f"{FULL_SCHEMA}.supplier_scenario_gold"  # Used for reallocation optimizer
+]
+missing_tables = [t for t in required_tables if not table_exists(t)]
+
+if missing_tables:
+    error_msg = f"""
+    ❌ Missing required tables: {missing_tables}
+    
+    Please run the following first:
+    1. Setup job (scrap_setup_job) - Creates bronze tables
+    2. DLT Pipeline - Creates silver tables from bronze
+    
+    Then re-run this ML training notebook.
+    """
+    raise Exception(error_msg)
+
+print(f"✅ All required tables exist in {FULL_SCHEMA}")
 
 # COMMAND ----------
 

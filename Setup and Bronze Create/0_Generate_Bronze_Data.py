@@ -16,7 +16,7 @@
 # MAGIC - Scrap Transactions (60K records, 3 years)
 # MAGIC - 8D Quality Reports
 # MAGIC 
-# MAGIC **Target Schema:** `welch.scrap_demo`
+# MAGIC **Target Schema:** `scrap_catalog.scrap_demo`
 
 # COMMAND ----------
 
@@ -53,10 +53,15 @@ spark = SparkSession.builder.getOrCreate()
 
 # COMMAND ----------
 
-# Configuration
-CATALOG = "welch"
-SCHEMA = "scrap_demo"
+# Configuration - Use widget parameters from job, with defaults for interactive use
+dbutils.widgets.text("catalog", "scrap_catalog", "Catalog Name")
+dbutils.widgets.text("schema", "scrap_demo", "Schema Name")
+
+CATALOG = dbutils.widgets.get("catalog")
+SCHEMA = dbutils.widgets.get("schema")
 FULL_SCHEMA = f"{CATALOG}.{SCHEMA}"
+
+print(f"Using catalog: {CATALOG}, schema: {SCHEMA}")
 
 # Data volume settings
 NUM_PARTS = 500

@@ -205,3 +205,11 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Databricks Asset Bundles
+.databricks/
+.bundle/
+*.tfstate
+*.tfstate.*
+.terraform/
+bundle.lock.json

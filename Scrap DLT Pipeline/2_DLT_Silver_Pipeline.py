@@ -31,8 +31,8 @@
 # MAGIC | **Type Standardization** | Ensure consistent data types |
 # MAGIC 
 # MAGIC ## Source/Target
-# MAGIC - **Source**: `welch.scrap_demo.*_bronze`
-# MAGIC - **Target**: `welch.scrap_demo.*_silver`
+# MAGIC - **Source**: `scrap_catalog.scrap_demo.*_bronze`
+# MAGIC - **Target**: `scrap_catalog.scrap_demo.*_silver`
 
 # COMMAND ----------
 
@@ -56,10 +56,12 @@ from pyspark.sql.types import *
 
 # COMMAND ----------
 
-# Configuration
-CATALOG = "welch"
-SCHEMA = "scrap_demo"
+# Configuration - Use pipeline configuration parameters, with defaults for interactive use
+CATALOG = spark.conf.get("catalog", "scrap_catalog")
+SCHEMA = spark.conf.get("schema", "scrap_demo")
 SOURCE_SCHEMA = f"{CATALOG}.{SCHEMA}"
+
+print(f"Using catalog: {CATALOG}, schema: {SCHEMA}")
 
 # COMMAND ----------
 

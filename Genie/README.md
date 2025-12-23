@@ -17,7 +17,7 @@ This folder contains configuration files for the Databricks Genie Space.
 - Create new space: "Scrap Analytics Assistant"
 
 ### 2. Add Tables
-Add these tables from `welch.scrap_demo`:
+Add these tables from `scrap_catalog.scrap_demo`:
 - `scrap_transactions_silver` ✅ (required)
 - `eight_d_reports_silver` ✅ (required)
 - `scrap_by_plant_gold`

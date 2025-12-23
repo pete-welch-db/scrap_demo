@@ -3,7 +3,7 @@
 Add these tables to your Genie Space for scrap analytics.
 
 ## Catalog & Schema
-- **Catalog**: `welch`
+- **Catalog**: `scrap_catalog`
 - **Schema**: `scrap_demo`
 
 ---
@@ -80,7 +80,7 @@ The silver tables include pre-joined lookup columns with `_lookup` suffix:
 SELECT 
     plant_name_lookup as Plant,
     CONCAT('$', FORMAT_NUMBER(ROUND(SUM(total_scrap_cost), 2), '#,##0.00')) as "Scrap Cost"
-FROM welch.scrap_demo.scrap_transactions_silver
+FROM scrap_catalog.scrap_demo.scrap_transactions_silver
 WHERE transaction_year = YEAR(CURRENT_DATE())
 GROUP BY plant_name_lookup
 ORDER BY SUM(total_scrap_cost) DESC
@@ -93,7 +93,7 @@ SELECT
     supplier_tier_lookup as Tier,
     ROUND(AVG(supplier_quality_score) * 100, 1) as "Quality %",
     CONCAT('$', FORMAT_NUMBER(ROUND(SUM(total_scrap_cost), 2), '#,##0.00')) as "Scrap Cost"
-FROM welch.scrap_demo.scrap_transactions_silver
+FROM scrap_catalog.scrap_demo.scrap_transactions_silver
 WHERE supplier_quality_score < 0.85
 GROUP BY supplier_name_lookup, supplier_tier_lookup
 ORDER BY SUM(total_scrap_cost) DESC
@@ -104,7 +104,7 @@ ORDER BY SUM(total_scrap_cost) DESC
 SELECT 
     year_month as Month,
     CONCAT('$', FORMAT_NUMBER(ROUND(SUM(total_scrap_cost), 2), '#,##0.00')) as "Scrap Cost"
-FROM welch.scrap_demo.scrap_monthly_summary_gold
+FROM scrap_catalog.scrap_demo.scrap_monthly_summary_gold
 ORDER BY year_month DESC
 LIMIT 12
 ```
@@ -117,7 +117,7 @@ SELECT
     severity as Severity,
     days_open as "Days Open",
     plant_name_lookup as Plant
-FROM welch.scrap_demo.eight_d_reports_silver
+FROM scrap_catalog.scrap_demo.eight_d_reports_silver
 WHERE status = 'Open'
 ORDER BY days_open DESC
 ```

@@ -1,0 +1,24 @@
+# Databricks Apps Configuration
+# ==============================
+# Deploys the Streamlit application to Databricks Apps
+
+resources:
+  apps:
+    # ============================================
+    # Scrap Reduction Intelligence Streamlit App
+    # ============================================
+    scrap_intelligence_app:
+      name: scrap-reduction-${bundle.target}
+      description: |
+        Scrap Reduction Intelligence Platform - Interactive dashboards, 
+        What-If scenario analysis, ML insights, and AI-powered assistant.
+      
+      # Source code location
+      source_code_path: ../app
+      
+      # Resources (Serverless SQL Warehouse access)
+      resources:
+        - name: sql-warehouse
+          sql_warehouse:
+            id: ${var.warehouse_id}
+            permission: CAN_USE

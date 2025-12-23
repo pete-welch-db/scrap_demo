@@ -191,7 +191,7 @@
 # MAGIC ### Step 1: Generate Bronze Data
 # MAGIC Run notebook `1_Generate_Bronze_Data.py`:
 # MAGIC - Installs faker library
-# MAGIC - Creates all bronze tables in `welch.scrap_demo`
+# MAGIC - Creates all bronze tables in `scrap_catalog.scrap_demo`
 # MAGIC - Generates 60K scrap transactions with embedded ML patterns
 # MAGIC - Creates 8D reports linked to scrap records
 # MAGIC 
@@ -202,14 +202,14 @@
 # MAGIC ```
 # MAGIC Name: scrap_demo_silver_pipeline
 # MAGIC Source: 2_DLT_Silver_Pipeline.py
-# MAGIC Target Schema: welch.scrap_demo
+# MAGIC Target Schema: scrap_catalog.scrap_demo
 # MAGIC ```
 # MAGIC 
 # MAGIC **Pipeline 2: Gold Aggregations**
 # MAGIC ```
 # MAGIC Name: scrap_demo_gold_pipeline
 # MAGIC Source: 3_DLT_Gold_Pipeline.py
-# MAGIC Target Schema: welch.scrap_demo
+# MAGIC Target Schema: scrap_catalog.scrap_demo
 # MAGIC Dependencies: scrap_demo_silver_pipeline (run after silver)
 # MAGIC ```
 # MAGIC 
@@ -218,10 +218,15 @@
 
 # COMMAND ----------
 
-# Configuration
-CATALOG = "welch"
-SCHEMA = "scrap_demo"
+# Configuration - Use widget parameters from job, with defaults for interactive use
+dbutils.widgets.text("catalog", "scrap_catalog", "Catalog Name")
+dbutils.widgets.text("schema", "scrap_demo", "Schema Name")
+
+CATALOG = dbutils.widgets.get("catalog")
+SCHEMA = dbutils.widgets.get("schema")
 FULL_SCHEMA = f"{CATALOG}.{SCHEMA}"
+
+print(f"Using catalog: {CATALOG}, schema: {SCHEMA}")
 
 # COMMAND ----------
 
@@ -262,7 +267,7 @@ for table in tables:
 # MAGIC     COUNT(*) as scrap_records,
 # MAGIC     SUM(quantity_scrapped) as total_qty,
 # MAGIC     ROUND(SUM(total_scrap_cost), 2) as total_cost
-# MAGIC FROM welch.scrap_demo.scrap_transactions_bronze
+# MAGIC FROM scrap_catalog.scrap_demo.scrap_transactions_bronze
 # MAGIC GROUP BY defect_code, defect_category
 # MAGIC ORDER BY total_cost DESC
 # MAGIC LIMIT 10
@@ -276,7 +281,7 @@ for table in tables:
 # MAGIC     SUM(quantity_scrapped) as total_qty,
 # MAGIC     ROUND(SUM(total_scrap_cost), 2) as total_cost,
 # MAGIC     COUNT(DISTINCT part_id) as unique_parts
-# MAGIC FROM welch.scrap_demo.scrap_transactions_bronze
+# MAGIC FROM scrap_catalog.scrap_demo.scrap_transactions_bronze
 # MAGIC GROUP BY DATE_TRUNC('month', transaction_date)
 # MAGIC ORDER BY month
 
@@ -291,8 +296,8 @@ for table in tables:
 # MAGIC     COUNT(*) as scrap_records,
 # MAGIC     SUM(t.quantity_scrapped) as total_qty_scrapped,
 # MAGIC     ROUND(SUM(t.total_scrap_cost), 2) as total_scrap_cost
-# MAGIC FROM welch.scrap_demo.scrap_transactions_bronze t
-# MAGIC JOIN welch.scrap_demo.suppliers_bronze s ON t.supplier_id = s.supplier_id
+# MAGIC FROM scrap_catalog.scrap_demo.scrap_transactions_bronze t
+# MAGIC JOIN scrap_catalog.scrap_demo.suppliers_bronze s ON t.supplier_id = s.supplier_id
 # MAGIC GROUP BY s.supplier_name, s.supplier_tier, s.quality_score
 # MAGIC ORDER BY total_scrap_cost DESC
 # MAGIC LIMIT 15
@@ -307,7 +312,7 @@ for table in tables:
 # MAGIC     COUNT(*) as num_reports,
 # MAGIC     ROUND(AVG(total_scrap_cost), 2) as avg_scrap_cost,
 # MAGIC     ROUND(AVG(num_parts_affected), 1) as avg_parts_affected
-# MAGIC FROM welch.scrap_demo.eight_d_reports_bronze
+# MAGIC FROM scrap_catalog.scrap_demo.eight_d_reports_bronze
 # MAGIC GROUP BY status, severity
 # MAGIC ORDER BY status, severity
 
@@ -322,7 +327,7 @@ for table in tables:
 # MAGIC     severity,
 # MAGIC     LEFT(root_cause_analysis, 300) as root_cause_preview,
 # MAGIC     LEFT(corrective_actions, 300) as corrective_action_preview
-# MAGIC FROM welch.scrap_demo.eight_d_reports_bronze
+# MAGIC FROM scrap_catalog.scrap_demo.eight_d_reports_bronze
 # MAGIC WHERE status = 'Closed'
 # MAGIC LIMIT 5
 

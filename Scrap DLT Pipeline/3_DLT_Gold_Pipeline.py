@@ -62,10 +62,12 @@ from pyspark.sql.window import Window
 
 # COMMAND ----------
 
-# Configuration
-CATALOG = "welch"
-SCHEMA = "scrap_demo"
+# Configuration - Use pipeline configuration parameters, with defaults for interactive use
+CATALOG = spark.conf.get("catalog", "scrap_catalog")
+SCHEMA = spark.conf.get("schema", "scrap_demo")
 SOURCE_SCHEMA = f"{CATALOG}.{SCHEMA}"
+
+print(f"Using catalog: {CATALOG}, schema: {SCHEMA}")
 
 # COMMAND ----------
 
