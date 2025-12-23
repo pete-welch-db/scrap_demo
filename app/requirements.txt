@@ -19,8 +19,8 @@ requests>=2.31.0
 # Databricks SQL Connection
 databricks-sql-connector>=2.9.0
 
-# Optional: Databricks SDK for advanced features
-# databricks-sdk>=0.12.0
+# Databricks SDK for authentication
+databricks-sdk>=0.12.0
 
 # Optional: For AI features (uncomment when implementing)
 # openai>=1.0.0

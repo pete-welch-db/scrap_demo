@@ -72,21 +72,33 @@ class AppConfig:
     title: str = "Scrap Reduction Intelligence"
     icon: str = "🔧"
     layout: str = "wide"
-    
+
+    # Environment: "LOCAL" (local dev) or "DBX" (Databricks Apps/DAB)
+    environment: str = "LOCAL"
+
     # Data refresh interval (seconds)
     cache_ttl: int = 300
-    
+
     # UI settings
     default_dashboard_height: int = 800
-    
+
     # Data source: "auto" (try live, fallback to mock) or "mock" (always mock)
     data_source: str = "auto"
-    
+
     @classmethod
     def from_env(cls) -> "AppConfig":
         return cls(
+            environment=os.getenv("ENVIRONMENT", "LOCAL"),
             data_source=os.getenv("DATA_SOURCE", "auto")
         )
+
+    def is_databricks(self) -> bool:
+        """Check if running in Databricks environment."""
+        return self.environment.upper() == "DBX"
+
+    def is_local(self) -> bool:
+        """Check if running in local environment."""
+        return self.environment.upper() == "LOCAL"
     
 
 # Global configuration instances
