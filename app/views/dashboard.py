@@ -90,21 +90,23 @@ def load_supplier_risk() -> Optional[pd.DataFrame]:
 @st.cache_data(ttl=app_config.cache_ttl)
 def load_anomalies() -> Optional[pd.DataFrame]:
     """Load anomaly detection results from ML."""
+    # Use transaction_date (actual scrap date), not detection_date (when model ran)
     query = f"""
     SELECT 
-        detection_date as transaction_date,
+        transaction_date,
         daily_cost as total_scrap_cost,
         daily_qty as quantity_scrapped,
         daily_records,
         anomaly_score,
         is_anomaly
     FROM {SCHEMA}.ml_scrap_anomalies
-    WHERE is_anomaly = true
-    ORDER BY detection_date DESC
+    WHERE is_anomaly = 1
+    ORDER BY transaction_date DESC
     LIMIT 50
     """
     df = run_query(query)
     if df is not None and len(df) > 0:
+        df['transaction_date'] = pd.to_datetime(df['transaction_date'])
         if 'plant' not in df.columns:
             df['plant'] = 'All Plants'
         if 'anomaly_reason' not in df.columns:
@@ -205,21 +207,27 @@ def get_mock_anomaly_data() -> pd.DataFrame:
     import numpy as np
     np.random.seed(123)
     
-    dates = pd.date_range(end=pd.Timestamp.now(), periods=20, freq='D')
+    # Create dates spread over last 30 days with gaps (anomalies don't happen every day)
+    base_dates = pd.date_range(end=pd.Timestamp.now().normalize(), periods=30, freq='D')
+    # Pick random subset of dates for anomalies
+    anomaly_dates = np.random.choice(base_dates, size=15, replace=False)
+    anomaly_dates = pd.to_datetime(sorted(anomaly_dates))
+    
     return pd.DataFrame({
-        'transaction_date': dates,
-        'total_scrap_cost': np.random.uniform(15000, 45000, 20),
-        'quantity_scrapped': np.random.randint(50, 200, 20),
-        'daily_records': np.random.randint(10, 50, 20),
-        'anomaly_score': np.random.uniform(0.7, 0.99, 20),
+        'transaction_date': anomaly_dates,
+        'total_scrap_cost': np.random.uniform(50000, 250000, len(anomaly_dates)),
+        'quantity_scrapped': np.random.randint(100, 500, len(anomaly_dates)),
+        'daily_records': np.random.randint(10, 50, len(anomaly_dates)),
+        'anomaly_score': np.random.uniform(0.7, 0.99, len(anomaly_dates)),
         'is_anomaly': True,
-        'plant': np.random.choice(['Plant A', 'Plant B', 'Plant C'], 20),
+        'plant': np.random.choice(['Detroit Assembly', 'Toledo Powertrain', 'Louisville Stamping'], len(anomaly_dates)),
         'anomaly_reason': np.random.choice([
             'Unusually high scrap volume',
-            'Cost spike detected',
-            'Pattern deviation',
-            'Equipment-related cluster'
-        ], 20)
+            'Cost spike detected', 
+            'Pattern deviation from baseline',
+            'Equipment-related cluster',
+            'Supplier quality issue detected'
+        ], len(anomaly_dates))
     })
 
 
@@ -312,9 +320,21 @@ def plot_forecast(df: pd.DataFrame) -> go.Figure:
         font=theme.get('font'),
         colorway=theme.get('colorway'),
         height=350,
-        margin=dict(l=0, r=0, t=40, b=0),
+        margin=dict(l=80, r=20, t=40, b=60),
         xaxis_title="Date",
         yaxis_title="Daily Scrap Cost ($)",
+        xaxis=dict(
+            tickformat='%b %d',
+            showticklabels=True,
+            tickfont=dict(size=11, color='#4a4a48'),
+            title_font=dict(size=12, color='#1B3139')
+        ),
+        yaxis=dict(
+            tickformat='$,.0f',
+            showticklabels=True,
+            tickfont=dict(size=11, color='#4a4a48'),
+            title_font=dict(size=12, color='#1B3139')
+        ),
         hovermode='x unified',
         legend=dict(orientation='h', y=1.1, font=dict(color='#4a4a48'))
     )
@@ -322,43 +342,44 @@ def plot_forecast(df: pd.DataFrame) -> go.Figure:
     return fig
 
 
-def plot_supplier_risk(df: pd.DataFrame) -> go.Figure:
-    """Create supplier risk scatter plot."""
+def plot_supplier_risk_pie(df: pd.DataFrame) -> go.Figure:
+    """Create supplier risk pie chart."""
     color_map = {'Low': '#10b981', 'Medium': '#f59e0b', 'High': '#f97316', 'Critical': '#ef4444'}
-    size_map = {'Low': 12, 'Medium': 16, 'High': 20, 'Critical': 24}
     
-    fig = go.Figure()
+    # Count by risk category
+    risk_counts = df['risk_category'].value_counts()
     
-    for category in ['Low', 'Medium', 'High', 'Critical']:
-        cat_df = df[df['risk_category'] == category]
-        if len(cat_df) > 0:
-            fig.add_trace(go.Scatter(
-                x=cat_df['quality_score'],
-                y=cat_df['delivery_score'],
-                mode='markers',
-                name=category,
-                marker=dict(
-                    size=size_map[category],
-                    color=color_map[category],
-                    opacity=0.7
-                ),
-                text=cat_df['supplier_name'],
-                hovertemplate='<b>%{text}</b><br>Quality: %{x:.1%}<br>Delivery: %{y:.1%}<extra></extra>'
-            ))
+    # Ensure order
+    categories = ['Low', 'Medium', 'High', 'Critical']
+    values = [risk_counts.get(cat, 0) for cat in categories]
+    colors = [color_map[cat] for cat in categories]
     
-    # Apply theme first, then override specific settings
+    fig = go.Figure(data=[go.Pie(
+        labels=categories,
+        values=values,
+        marker_colors=colors,
+        hole=0.4,
+        textinfo='label+value',
+        textposition='outside',
+        textfont=dict(size=12),
+        hovertemplate='<b>%{label}</b><br>%{value} suppliers (%{percent})<extra></extra>'
+    )])
+    
     theme = create_plotly_theme()
     fig.update_layout(
         paper_bgcolor=theme.get('paper_bgcolor'),
         plot_bgcolor=theme.get('plot_bgcolor'),
         font=theme.get('font'),
-        height=350,
-        margin=dict(l=0, r=0, t=40, b=0),
-        xaxis_title="Quality Score",
-        yaxis_title="Delivery Score",
-        xaxis=dict(tickformat='.0%', range=[0.6, 1.0]),
-        yaxis=dict(tickformat='.0%', range=[0.6, 1.0]),
-        legend=dict(orientation='h', y=1.1)
+        height=300,
+        margin=dict(l=20, r=20, t=20, b=20),
+        showlegend=False,
+        annotations=[dict(
+            text='Risk<br>Distribution',
+            x=0.5, y=0.5,
+            font_size=14,
+            font_color='#1B3139',
+            showarrow=False
+        )]
     )
     
     return fig
@@ -485,7 +506,7 @@ def render_dashboard_page():
                 st.metric("Uncertainty Range", f"±${uncertainty/2:,.0f}")
         
         # Forecast chart
-        st.plotly_chart(plot_forecast(forecast_df), use_container_width=True, key="forecast_chart")
+        st.plotly_chart(plot_forecast(forecast_df), width='stretch', key="forecast_chart")
     
     # =========================================================================
     # TAB 3: SUPPLIER RISK
@@ -507,7 +528,7 @@ def render_dashboard_page():
         
         st.caption(data_source)
         
-        # Risk distribution
+        # Risk distribution metrics
         col1, col2, col3, col4 = st.columns(4)
         risk_counts = risk_df['risk_category'].value_counts()
         
@@ -520,17 +541,39 @@ def render_dashboard_page():
         with col4:
             st.metric("🔴 Critical", risk_counts.get('Critical', 0))
         
-        # Risk scatter plot
-        st.plotly_chart(plot_supplier_risk(risk_df), use_container_width=True, key="risk_chart")
+        # Pie chart and drill-down side by side
+        chart_col, detail_col = st.columns([1, 2])
         
-        # Detailed table
-        with st.expander("📋 Supplier Details"):
-            st.dataframe(
-                risk_df[['supplier_name', 'tier', 'quality_score', 'delivery_score', 
-                        'overall_risk_score', 'risk_category', 'recommendation']],
-                use_container_width=True,
-                hide_index=True
+        with chart_col:
+            st.markdown("##### Risk Distribution")
+            st.plotly_chart(plot_supplier_risk_pie(risk_df), width='stretch', key="risk_pie_chart")
+        
+        with detail_col:
+            st.markdown("##### Drill Down by Category")
+            
+            # Category selector
+            selected_category = st.selectbox(
+                "Select risk level to view suppliers:",
+                ["All", "Critical", "High", "Medium", "Low"],
+                key="risk_category_filter"
             )
+            
+            # Filter data
+            if selected_category == "All":
+                filtered_df = risk_df
+            else:
+                filtered_df = risk_df[risk_df['risk_category'] == selected_category]
+            
+            # Show filtered suppliers
+            if len(filtered_df) > 0:
+                display_df = filtered_df[['supplier_name', 'tier', 'quality_score', 'delivery_score', 
+                                         'risk_category', 'recommendation']].copy()
+                display_df['quality_score'] = display_df['quality_score'].apply(lambda x: f"{x:.1%}")
+                display_df['delivery_score'] = display_df['delivery_score'].apply(lambda x: f"{x:.1%}")
+                display_df.columns = ['Supplier', 'Tier', 'Quality', 'Delivery', 'Risk', 'Action']
+                st.dataframe(display_df, width='stretch', hide_index=True, height=250)
+            else:
+                st.info(f"No {selected_category.lower()} risk suppliers found.")
     
     # =========================================================================
     # TAB 4: ANOMALY DETECTION
@@ -563,12 +606,17 @@ def render_dashboard_page():
             avg_score = anomaly_df['anomaly_score'].mean()
             st.metric("📊 Avg Anomaly Score", f"{avg_score:.2f}")
         
-        # Anomaly timeline
+        # Anomaly timeline chart
+        st.markdown("##### Anomaly Timeline")
+        st.caption("Scrap volume on days with detected anomalies")
+        
         anomaly_df['transaction_date'] = pd.to_datetime(anomaly_df['transaction_date'])
+        anomaly_df_sorted = anomaly_df.sort_values('transaction_date')
+        
         fig = go.Figure()
         fig.add_trace(go.Scatter(
-            x=anomaly_df['transaction_date'],
-            y=anomaly_df['total_scrap_cost'],
+            x=anomaly_df_sorted['transaction_date'].tolist(),
+            y=anomaly_df_sorted['total_scrap_cost'].tolist(),
             mode='markers+lines',
             marker=dict(
                 size=12,
@@ -576,7 +624,7 @@ def render_dashboard_page():
                 opacity=0.7
             ),
             line=dict(color='#FF3621', width=1),
-            hovertemplate='<b>%{x}</b><br>Cost: $%{y:,.0f}<extra></extra>'
+            hovertemplate='<b>%{x|%Y-%m-%d}</b><br>Volume: $%{y:,.0f}<extra></extra>'
         ))
         
         theme = create_plotly_theme()
@@ -585,21 +633,35 @@ def render_dashboard_page():
             plot_bgcolor=theme.get('plot_bgcolor'),
             font=theme.get('font'),
             height=300,
-            margin=dict(l=0, r=0, t=20, b=0),
+            margin=dict(l=80, r=20, t=20, b=60),
             xaxis_title="Date",
-            yaxis_title="Scrap Cost ($)",
+            yaxis_title="Volume ($)",
+            xaxis=dict(
+                tickformat='%b %d', 
+                showticklabels=True,
+                tickfont=dict(size=11, color='#4a4a48'),
+                title_font=dict(size=12, color='#1B3139')
+            ),
+            yaxis=dict(
+                tickformat='$,.0f', 
+                showticklabels=True,
+                tickfont=dict(size=11, color='#4a4a48'),
+                title_font=dict(size=12, color='#1B3139')
+            ),
             showlegend=False
         )
-        st.plotly_chart(fig, use_container_width=True, key="anomaly_chart")
+        st.plotly_chart(fig, width='stretch', key="anomaly_chart")
         
         # Anomaly table
         with st.expander("📋 Anomaly Details"):
             display_df = anomaly_df[['transaction_date', 'plant', 'total_scrap_cost', 
                                      'quantity_scrapped', 'anomaly_score', 'anomaly_reason']].copy()
+            # Format date to be readable (just date, no time)
+            display_df['transaction_date'] = pd.to_datetime(display_df['transaction_date']).dt.strftime('%Y-%m-%d')
             display_df['total_scrap_cost'] = display_df['total_scrap_cost'].apply(lambda x: f"${x:,.0f}")
             display_df['anomaly_score'] = display_df['anomaly_score'].apply(lambda x: f"{x:.2f}")
             display_df.columns = ['Date', 'Plant', 'Scrap Cost', 'Qty', 'Score', 'Reason']
-            st.dataframe(display_df, use_container_width=True, hide_index=True)
+            st.dataframe(display_df, width='stretch', hide_index=True)
     
     # =========================================================================
     # TAB 5: ROOT CAUSE VALIDATION
@@ -632,13 +694,16 @@ def render_dashboard_page():
         with col1:
             st.metric("✅ Model Accuracy", f"{accuracy:.1%}")
         with col2:
-            st.metric("⚠️ Disagreements", int(disagreements))
+            st.metric("⚠️ Total Disagreements", int(disagreements))
         with col3:
-            st.metric("🚨 High-Confidence Flags", int(high_conf_disagree))
+            st.metric("🔍 Cases to Review", int(high_conf_disagree), help="High-confidence model predictions that disagree with manual assignments")
         with col4:
             st.metric("💰 Cost at Risk", f"${cost_at_risk:,.0f}")
         
         # Disagreement breakdown by defect category
+        st.markdown("##### Disagreements by Defect Category")
+        st.caption("Where ML predictions differ from manual Quality team assignments")
+        
         if 'defect_category' in rc_df.columns:
             disagree_by_defect = rc_df.groupby('defect_category').agg({
                 'disagreement_flag': 'sum',
@@ -646,10 +711,10 @@ def render_dashboard_page():
             }).reset_index()
             
             fig = go.Figure(go.Bar(
-                x=disagree_by_defect['defect_category'],
-                y=disagree_by_defect['disagreement_flag'],
+                x=disagree_by_defect['defect_category'].tolist(),
+                y=disagree_by_defect['disagreement_flag'].tolist(),
                 marker_color='#FF3621',
-                text=disagree_by_defect['disagreement_flag'],
+                text=disagree_by_defect['disagreement_flag'].tolist(),
                 textposition='outside'
             ))
             
@@ -658,13 +723,25 @@ def render_dashboard_page():
                 paper_bgcolor=theme.get('paper_bgcolor'),
                 plot_bgcolor=theme.get('plot_bgcolor'),
                 font=theme.get('font'),
-                height=280,
-                margin=dict(l=0, r=0, t=20, b=0),
+                height=320,
+                margin=dict(l=60, r=20, t=20, b=100),
                 xaxis_title="Defect Category",
-                yaxis_title="Disagreements",
+                yaxis_title="Count",
+                xaxis=dict(
+                    showticklabels=True, 
+                    tickangle=-30,
+                    tickfont=dict(size=11, color='#4a4a48'),
+                    title_font=dict(size=12, color='#1B3139')
+                ),
+                yaxis=dict(
+                    showticklabels=True,
+                    tickfont=dict(size=11, color='#4a4a48'),
+                    title_font=dict(size=12, color='#1B3139'),
+                    dtick=1  # Show integer ticks
+                ),
                 showlegend=False
             )
-            st.plotly_chart(fig, use_container_width=True, key="root_cause_chart")
+            st.plotly_chart(fig, width='stretch', key="root_cause_chart")
         
         # Cases to review
         with st.expander("🔍 Cases to Review (High-Confidence Disagreements)"):
@@ -676,6 +753,6 @@ def render_dashboard_page():
                 review_display['prediction_confidence'] = review_display['prediction_confidence'].apply(lambda x: f"{x:.1%}")
                 review_display['total_scrap_cost'] = review_display['total_scrap_cost'].apply(lambda x: f"${x:,.0f}")
                 review_display.columns = ['Defect', 'Actual Root Cause', 'ML Prediction', 'Confidence', 'Cost']
-                st.dataframe(review_display, use_container_width=True, hide_index=True)
+                st.dataframe(review_display, width='stretch', hide_index=True)
             else:
                 st.info("No high-confidence disagreements found.")

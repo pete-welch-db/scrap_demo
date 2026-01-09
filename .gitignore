@@ -213,3 +213,7 @@ __marimo__/
 *.tfstate.*
 .terraform/
 bundle.lock.json
+
+# Pitch deck (internal only)
+pitch/
+Scrap Reduction - Pitch Deck (DRAFT).pdf

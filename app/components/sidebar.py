@@ -6,7 +6,7 @@ Styled with Databricks Oat Medium theme.
 """
 
 import streamlit as st
-from config import databricks_config
+from config import databricks_config, genie_config
 from data.connection import test_db_connection
 
 
@@ -43,6 +43,7 @@ def render_sidebar() -> str:
         page = st.radio(
             "Navigation",
             [
+                "🏠 Overview",
                 "📊 Executive Dashboard", 
                 "🎯 What-If Scenarios", 
                 "💬 AI Assistant"
@@ -50,13 +51,10 @@ def render_sidebar() -> str:
             label_visibility="collapsed"
         )
         
-        # Spacer to push settings to bottom
-        st.markdown('<div style="flex-grow: 1; min-height: 100px;"></div>', unsafe_allow_html=True)
-        
-        # Settings at bottom
+        # Settings at bottom (positioned via CSS flexbox)
         with st.expander("⚙️ Settings"):
-            # Connection Status
-            st.markdown("**🔌 Connection**")
+            # Database Connection Status
+            st.markdown("**🔌 Database**")
             db_connected = test_db_connection()
             
             if db_connected:
@@ -67,6 +65,19 @@ def render_sidebar() -> str:
             else:
                 st.markdown(
                     '<span class="status-badge disconnected">❌ Mock Data</span>', 
+                    unsafe_allow_html=True
+                )
+            
+            # Genie API Status
+            st.markdown("**🧞 Genie API**")
+            if genie_config.is_configured():
+                st.markdown(
+                    f'<span class="status-badge connected">✅ {genie_config.space_name}</span>', 
+                    unsafe_allow_html=True
+                )
+            else:
+                st.markdown(
+                    '<span class="status-badge disconnected">⚠️ Not Configured</span>', 
                     unsafe_allow_html=True
                 )
             
@@ -85,7 +96,7 @@ def render_sidebar() -> str:
             st.markdown("---")
             
             # Refresh button
-            if st.button("🔄 Refresh", use_container_width=True):
+            if st.button("🔄 Refresh", width='stretch'):
                 st.cache_data.clear()
                 st.rerun()
         

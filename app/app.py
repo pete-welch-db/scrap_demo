@@ -14,7 +14,7 @@ Deployable to Databricks Apps or locally.
 import streamlit as st
 from config import app_config
 from components import apply_custom_styles, render_header, render_sidebar
-from views import render_dashboard_page, render_scenarios_page, render_assistant_page
+from views import render_landing_page, render_dashboard_page, render_scenarios_page, render_assistant_page
 # from views import render_ml_insights_page  # Commented out - moved to Dashboard tabs
 
 
@@ -49,7 +49,10 @@ selected_page = render_sidebar()
 # PAGE ROUTING
 # =============================================================================
 
-if selected_page == "📊 Executive Dashboard":
+if selected_page == "🏠 Overview":
+    render_landing_page()
+
+elif selected_page == "📊 Executive Dashboard":
     render_dashboard_page()
 
 elif selected_page == "🎯 What-If Scenarios":

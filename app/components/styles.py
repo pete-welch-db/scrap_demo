@@ -50,10 +50,36 @@ def apply_custom_styles():
             display: none;
         }
         
+        /* Reduce top padding in main content area */
+        .stMainBlockContainer {
+            padding-top: 0 !important;
+        }
+        
+        [data-testid="stAppViewBlockContainer"] {
+            padding-top: 0 !important;
+        }
+        
+        .block-container {
+            padding-top: 0.5rem !important;
+        }
+        
         /* Sidebar */
         [data-testid="stSidebar"] {
             background: var(--bg-secondary);
             border-right: 1px solid var(--border-color);
+        }
+        
+        /* Make sidebar use flexbox to push settings to bottom */
+        [data-testid="stSidebar"] [data-testid="stSidebarContent"] {
+            display: flex !important;
+            flex-direction: column !important;
+            height: calc(100vh - 60px) !important;
+            padding-bottom: 20px !important;
+        }
+        
+        /* Settings expander pushed to bottom */
+        [data-testid="stSidebar"] [data-testid="stExpander"] {
+            margin-top: auto !important;
         }
         
         [data-testid="stSidebar"] .stMarkdown {
@@ -235,9 +261,24 @@ def apply_custom_styles():
         
         /* Chat components */
         .stChatInput > div {
-            background: var(--bg-card);
+            background: var(--bg-card) !important;
             border: 1px solid var(--border-color);
             border-radius: 8px;
+        }
+        
+        /* Position chat input above footer and style container */
+        [data-testid="stChatInput"] {
+            bottom: 60px !important;
+            background: var(--bg-primary) !important;
+            padding: 12px 0 !important;
+        }
+        
+        [data-testid="stBottom"] {
+            background: var(--bg-primary) !important;
+        }
+        
+        [data-testid="stBottomBlockContainer"] {
+            background: var(--bg-primary) !important;
         }
         
         .stChatMessage {
@@ -246,12 +287,32 @@ def apply_custom_styles():
             border: 1px solid var(--border-color);
         }
         
-        /* Expander */
-        .streamlit-expanderHeader {
-            background: var(--bg-card);
+        /* Expander - light theme styling */
+        .streamlit-expanderHeader,
+        [data-testid="stExpander"] summary,
+        [data-testid="stExpander"] > div:first-child {
+            background: var(--bg-card) !important;
             border-radius: 8px;
-            color: var(--text-primary);
+            color: var(--text-primary) !important;
             font-family: "DM Sans", sans-serif;
+        }
+        
+        [data-testid="stExpander"] {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+        }
+        
+        [data-testid="stExpander"] summary {
+            padding: 12px 16px;
+        }
+        
+        [data-testid="stExpander"] summary:hover {
+            background: var(--oat-light) !important;
+        }
+        
+        [data-testid="stExpander"] svg {
+            fill: var(--text-primary) !important;
         }
         
         /* Section divider */
@@ -365,7 +426,7 @@ def render_header():
         border-bottom: 1px solid #e0dfdc;
         padding: 8px 24px;
         background: white;
-        margin: -1rem -1rem 0.75rem -1rem;
+        margin: -1rem -1rem 0.25rem -1rem;
         width: calc(100% + 2rem);
         min-height: 48px;
     ">
