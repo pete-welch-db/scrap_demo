@@ -2,6 +2,7 @@
 Metric Components
 =================
 Reusable metric cards and chart theming.
+Styled with Databricks Oat Medium theme.
 """
 
 from typing import Optional
@@ -42,22 +43,45 @@ def create_metric_card(
 
 def create_plotly_theme() -> dict:
     """
-    Return consistent Plotly theme configuration for dark mode.
+    Return consistent Plotly theme configuration for Databricks Oat Medium theme.
     
     Returns:
         Dictionary of Plotly layout settings
     """
     return {
-        'paper_bgcolor': 'rgba(0,0,0,0)',
-        'plot_bgcolor': 'rgba(0,0,0,0)',
-        'font': {'color': '#94a3b8', 'family': 'Inter'},
+        'paper_bgcolor': 'rgba(255,255,255,0)',
+        'plot_bgcolor': 'rgba(255,255,255,0)',
+        'font': {
+            'color': '#4a4a48', 
+            'family': 'DM Sans, sans-serif'
+        },
+        'title': {
+            'font': {
+                'color': '#151513',
+                'family': 'DM Sans, sans-serif',
+                'weight': 600
+            }
+        },
         'xaxis': {
-            'gridcolor': 'rgba(45, 45, 68, 0.5)',
-            'linecolor': 'rgba(45, 45, 68, 0.5)'
+            'gridcolor': 'rgba(224, 223, 220, 0.7)',
+            'linecolor': '#e0dfdc',
+            'tickfont': {'color': '#4a4a48'}
         },
         'yaxis': {
-            'gridcolor': 'rgba(45, 45, 68, 0.5)',
-            'linecolor': 'rgba(45, 45, 68, 0.5)'
+            'gridcolor': 'rgba(224, 223, 220, 0.7)',
+            'linecolor': '#e0dfdc',
+            'tickfont': {'color': '#4a4a48'}
+        },
+        'colorway': [
+            '#FF3621',  # Lava 600 (primary)
+            '#1B3139',  # Navy 800
+            '#FF5F46',  # Lava 500
+            '#0B2026',  # Navy 900
+            '#10b981',  # Success green
+            '#f59e0b',  # Warning orange
+        ],
+        'legend': {
+            'font': {'color': '#4a4a48'},
+            'bgcolor': 'rgba(255,255,255,0.8)'
         }
     }
-

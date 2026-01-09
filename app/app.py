@@ -3,7 +3,7 @@ Scrap Reduction Intelligence
 ============================
 Main application entry point.
 
-A modern, dark-mode Streamlit app for:
+A Streamlit app with Databricks Oat Medium branding for:
 - Viewing executive dashboards (via Databricks iframe embed)
 - Running what-if scenarios for scrap reduction
 - AI assistant integration (Genie/multi-agent chatbots)
@@ -12,20 +12,9 @@ Deployable to Databricks Apps or locally.
 """
 
 import streamlit as st
-import base64
-from pathlib import Path
 from config import app_config
-from components import apply_custom_styles, render_sidebar
+from components import apply_custom_styles, render_header, render_sidebar
 from views import render_dashboard_page, render_scenarios_page, render_ml_insights_page, render_assistant_page
-
-
-def get_databricks_logo_base64():
-    """Load and encode the Databricks logo as base64."""
-    logo_path = Path(__file__).parent / "assets" / "Databricks_Logo.png"
-    if logo_path.exists():
-        with open(logo_path, "rb") as f:
-            return base64.b64encode(f.read()).decode()
-    return None
 
 
 # =============================================================================
@@ -41,10 +30,11 @@ st.set_page_config(
 
 
 # =============================================================================
-# APPLY STYLES
+# APPLY STYLES & HEADER
 # =============================================================================
 
 apply_custom_styles()
+render_header()
 
 
 # =============================================================================
@@ -75,37 +65,20 @@ elif selected_page == "💬 AI Assistant":
 # FOOTER WITH DATABRICKS BRANDING
 # =============================================================================
 
-logo_b64 = get_databricks_logo_base64()
-if logo_b64:
-    st.markdown(f"""
-    <div style="
-        text-align: center; 
-        padding: 40px 0 20px; 
-        border-top: 1px solid var(--border-color); 
-        margin-top: 40px;
+st.markdown("""
+<div style="
+    text-align: center; 
+    padding: 40px 0 20px; 
+    border-top: 1px solid #e0dfdc; 
+    margin-top: 40px;
+">
+    <p style="
+        color: #6b6b69; 
+        font-size: 0.875rem; 
+        margin: 0;
+        font-family: 'DM Sans', sans-serif;
     ">
-        <div style="
-            display: inline-block;
-            background: white;
-            padding: 12px 24px;
-            border-radius: 8px;
-            margin-bottom: 16px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        ">
-            <img src="data:image/png;base64,{logo_b64}" 
-                 style="max-height: 32px; width: auto;" 
-                 alt="Powered by Databricks">
-        </div>
-        <p style="color: var(--text-muted); font-size: 0.875rem; margin: 0;">
-            Scrap Reduction Intelligence Platform | Built with Streamlit & Databricks
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-else:
-    st.markdown("""
-    <div style="text-align: center; padding: 40px 0 20px; border-top: 1px solid var(--border-color); margin-top: 40px;">
-        <p style="color: var(--text-muted); font-size: 0.875rem;">
-            Scrap Reduction Intelligence Platform | Built with Streamlit & Databricks
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+        Scrap Reduction Intelligence Platform | Built with Streamlit & Databricks
+    </p>
+</div>
+""", unsafe_allow_html=True)

@@ -2,22 +2,12 @@
 Sidebar Component
 =================
 Navigation and status sidebar for the application.
+Styled with Databricks Oat Medium theme.
 """
 
 import streamlit as st
-import base64
-from pathlib import Path
 from config import databricks_config
 from data.connection import test_db_connection
-
-
-def get_logo_base64():
-    """Load and encode the Databricks logo as base64."""
-    logo_path = Path(__file__).parent.parent / "assets" / "Databricks_Logo.png"
-    if logo_path.exists():
-        with open(logo_path, "rb") as f:
-            return base64.b64encode(f.read()).decode()
-    return None
 
 
 def render_sidebar() -> str:
@@ -28,29 +18,22 @@ def render_sidebar() -> str:
         str: The selected page name
     """
     with st.sidebar:
-        # Databricks logo with white background
-        logo_b64 = get_logo_base64()
-        if logo_b64:
-            st.markdown(f"""
-            <div style="
-                text-align: center; 
-                padding: 16px; 
-                margin-bottom: 16px;
-                background: white;
-                border-radius: 12px;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            ">
-                <img src="data:image/png;base64,{logo_b64}" 
-                     style="max-width: 160px; height: auto;" 
-                     alt="Databricks">
-            </div>
-            """, unsafe_allow_html=True)
-        
-        # App title
+        # App title with Databricks styling
         st.markdown("""
-        <div style="text-align: center; padding: 12px 0;">
-            <h2 style="margin: 0; font-size: 1.5rem;">🔧 Scrap Intelligence</h2>
-            <p style="color: #64748b; font-size: 0.875rem; margin-top: 8px;">
+        <div style="text-align: center; padding: 16px 0 8px;">
+            <h2 style="
+                margin: 0; 
+                font-size: 1.5rem; 
+                color: #1B3139;
+                font-family: 'DM Sans', sans-serif;
+                font-weight: 600;
+            ">🔧 Scrap Intelligence</h2>
+            <p style="
+                color: #6b6b69; 
+                font-size: 0.875rem; 
+                margin-top: 8px;
+                font-family: 'DM Sans', sans-serif;
+            ">
                 Automotive Quality Analytics
             </p>
         </div>
@@ -96,8 +79,19 @@ def render_sidebar() -> str:
             
             host_display = databricks_config.host[:30] + "..." if len(databricks_config.host) > 30 else databricks_config.host
             st.markdown(f"""
-            <p style="font-size: 0.7rem; color: #64748b; margin-top: 4px; margin-bottom: 12px;">
-                Host: <code>{host_display}</code>
+            <p style="
+                font-size: 0.7rem; 
+                color: #6b6b69; 
+                margin-top: 4px; 
+                margin-bottom: 12px;
+                font-family: 'DM Sans', sans-serif;
+            ">
+                Host: <code style="
+                    background: #e0dfdc;
+                    padding: 2px 6px;
+                    border-radius: 4px;
+                    font-size: 0.65rem;
+                ">{host_display}</code>
             </p>
             """, unsafe_allow_html=True)
             
@@ -130,4 +124,3 @@ def render_sidebar() -> str:
                 st.rerun()
         
         return page
-
