@@ -695,8 +695,11 @@ def render_supplier_scenario(suppliers_df: pd.DataFrame):
                     textposition='outside'
                 ))
             
+            theme = create_plotly_theme()
             fig.update_layout(
-                **create_plotly_theme(),
+                paper_bgcolor=theme.get('paper_bgcolor'),
+                plot_bgcolor=theme.get('plot_bgcolor'),
+                font=theme.get('font'),
                 height=250,
                 margin=dict(l=0, r=0, t=30, b=0),
                 showlegend=False,
@@ -784,11 +787,14 @@ def render_supplier_scenario(suppliers_df: pd.DataFrame):
             hoverinfo='skip'
         ))
         
+        theme = create_plotly_theme()
         fig2.update_layout(
-            **create_plotly_theme(),
+            paper_bgcolor=theme.get('paper_bgcolor'),
+            plot_bgcolor=theme.get('plot_bgcolor'),
+            font=theme.get('font'),
             height=350,
             margin=dict(l=0, r=0, t=20, b=0),
-            legend=dict(orientation='h', y=-0.15)
+            legend=dict(orientation='h', y=-0.15, font=dict(color='#4a4a48'))
         )
         
         st.plotly_chart(fig2, use_container_width=True, key="supplier_scatter_chart")
@@ -1226,11 +1232,14 @@ def render_plant_scenario(monthly_df: pd.DataFrame, plants: list):
             fillcolor='rgba(16, 185, 129, 0.1)'
         ))
         
+        theme = create_plotly_theme()
         fig.update_layout(
-            **create_plotly_theme(),
+            paper_bgcolor=theme.get('paper_bgcolor'),
+            plot_bgcolor=theme.get('plot_bgcolor'),
+            font=theme.get('font'),
             height=300,
             margin=dict(l=0, r=0, t=40, b=0),
-            legend=dict(orientation='h', y=1.1),
+            legend=dict(orientation='h', y=1.1, font=dict(color='#4a4a48')),
             hovermode='x unified',
             xaxis_title="Month",
             yaxis_title="Monthly Scrap Cost ($)"
@@ -1357,12 +1366,15 @@ def render_work_center_scenario(wc_df: pd.DataFrame, work_centers: list):
             }
         )
         
+        theme = create_plotly_theme()
         fig.update_layout(
-            **create_plotly_theme(),
+            paper_bgcolor=theme.get('paper_bgcolor'),
+            plot_bgcolor=theme.get('plot_bgcolor'),
+            font=theme.get('font'),
             height=350,
             margin=dict(l=0, r=0, t=20, b=0),
             showlegend=True,
-            legend=dict(orientation='h', y=-0.2)
+            legend=dict(orientation='h', y=-0.2, font=dict(color='#4a4a48'))
         )
         
         fig.update_traces(marker=dict(line=dict(width=1, color='white')))
@@ -1512,12 +1524,15 @@ def render_part_scenario(parts_df: pd.DataFrame):
                 marker_color='#10b981'
             ))
             
+            theme = create_plotly_theme()
             fig.update_layout(
-                **create_plotly_theme(),
+                paper_bgcolor=theme.get('paper_bgcolor'),
+                plot_bgcolor=theme.get('plot_bgcolor'),
+                font=theme.get('font'),
                 height=300,
                 margin=dict(l=0, r=0, t=40, b=0),
                 barmode='group',
-                legend=dict(orientation='h', y=1.1),
+                legend=dict(orientation='h', y=1.1, font=dict(color='#4a4a48')),
                 xaxis_tickangle=-45
             )
             

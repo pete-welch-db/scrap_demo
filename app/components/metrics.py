@@ -59,7 +59,7 @@ def create_plotly_theme() -> dict:
             'font': {
                 'color': '#151513',
                 'family': 'DM Sans, sans-serif',
-                'weight': 600
+                'size': 16
             }
         },
         'xaxis': {

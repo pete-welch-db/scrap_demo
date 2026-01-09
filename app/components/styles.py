@@ -213,11 +213,17 @@ def apply_custom_styles():
             color: var(--text-secondary);
             font-weight: 500;
             font-family: "DM Sans", sans-serif;
+            padding: 8px 16px;
         }
         
         .stTabs [aria-selected="true"] {
-            background: var(--navy-800);
-            color: white;
+            background: var(--lava-600) !important;
+            color: white !important;
+        }
+        
+        .stTabs [data-baseweb="tab"]:hover {
+            background: rgba(255, 54, 33, 0.1);
+            color: var(--lava-600);
         }
         
         /* DataFrames */
@@ -356,11 +362,12 @@ def render_header():
         align-items: center;
         justify-content: space-between;
         white-space: nowrap;
-        border-bottom: 1px solid #eeeeec;
-        padding: 12px 40px;
+        border-bottom: 1px solid #e0dfdc;
+        padding: 8px 24px;
         background: white;
-        margin: -1rem -1rem 1.5rem -1rem;
+        margin: -1rem -1rem 0.75rem -1rem;
         width: calc(100% + 2rem);
+        min-height: 48px;
     ">
         <div style="display: flex; align-items: center; gap: 16px; color: #151513;">
             <a href="https://dbricks.co/manufacturing" target="_blank" 
