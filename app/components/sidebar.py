@@ -96,7 +96,7 @@ def render_sidebar() -> str:
             st.markdown("---")
             
             # Refresh button
-            if st.button("🔄 Refresh", width='stretch'):
+            if st.button("🔄 Refresh", use_container_width=True):
                 st.cache_data.clear()
                 st.rerun()
         

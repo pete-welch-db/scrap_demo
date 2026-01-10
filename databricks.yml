@@ -19,7 +19,11 @@ variables:
     default: scrap_demo
   warehouse_id:
     description: SQL Warehouse ID for queries
-    default: 4b9b953939869799
+    default: 288a7ec183eea397
+  # Service principal for production deployments
+  service_principal_name:
+    description: Service principal for running jobs and apps
+    default: ""
 
 # Include resource definitions from separate files
 include:
@@ -40,10 +44,10 @@ targets:
       catalog: scrap_catalog
       schema: scrap_demo
     workspace:
-      host: https://e2-demo-field-eng.cloud.databricks.com
-      profile: aws-ws
+      host: https://fe-vm-industry-solutions-buildathon.cloud.databricks.com
+      profile: fe-vm-industry-solutions-buildathon
 
-  # # Staging environment  
+  # Staging environment  
   # staging:
   #   mode: development
   #   variables:
@@ -52,17 +56,23 @@ targets:
   #   run_as:
   #     user_name: ${workspace.current_user.userName}
 
-  # # Production environment
+  # Production environment with Service Principal
   # prod:
   #   mode: production
   #   variables:
   #     catalog: scrap_catalog_prod
   #     schema: scrap_demo_prod
-  #   run_as:
-  #     # Update to production service principal
   #     service_principal_name: scrap-platform-prod-sp
+  #   
+  #   # Run jobs/apps as service principal (not user)
+  #   run_as:
+  #     service_principal_name: ${var.service_principal_name}
+  #   
+  #   # Bundle-level permissions (applies to all resources)
   #   permissions:
   #     - level: CAN_VIEW
   #       group_name: users
+  #     - level: CAN_RUN
+  #       group_name: data-engineers
   #     - level: CAN_MANAGE
-  #       group_name: scrap-platform-admins
+  #       service_principal_name: ${var.service_principal_name}

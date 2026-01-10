@@ -80,9 +80,12 @@ START_DATE = END_DATE - timedelta(days=HISTORY_YEARS * 365)
 
 # COMMAND ----------
 
-# Create schema if not exists
-spark.sql(f"CREATE CATALOG IF NOT EXISTS {CATALOG}")
-spark.sql(f"CREATE SCHEMA IF NOT EXISTS {FULL_SCHEMA}")
+try:
+    # Create schema if not exists
+    spark.sql(f"CREATE CATALOG IF NOT EXISTS {CATALOG}")
+    spark.sql(f"CREATE SCHEMA IF NOT EXISTS {FULL_SCHEMA}")
+except:
+    pass
 
 # COMMAND ----------
 
