@@ -5,12 +5,19 @@ name: scrap-reduction-intelligence
 description: Scrap Reduction Intelligence Platform - Dashboards, What-If Analysis, AI Assistant
 
 # Entry point
-command: ["streamlit", "run", "app.py"]
+# <<<<<<< feature/dbapps
+# command: ["streamlit", "run", "app.py"]
 
-# Environment variables
-env:
-  - name: ENVIRONMENT
-    value: "DBX"
+# # Environment variables
+# env:
+#   - name: ENVIRONMENT
+#     value: "DBX"
+# =======
+# command: ["streamlit", "run", "app.py", "--server.port", "8000", "--server.headless", "true"]
+
+# # Environment variables are automatically set by Databricks Apps runtime
+# # (DATABRICKS_HOST, DATABRICKS_TOKEN, DATABRICKS_WAREHOUSE_ID)
+# >>>>>>> main
 
 # Resources
 resources:

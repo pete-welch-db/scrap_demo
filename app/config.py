@@ -31,7 +31,7 @@ class DatabricksConfig:
             host=os.getenv("DATABRICKS_HOST", "adb-984752964297111.11.azuredatabricks.net"),
             http_path=os.getenv("DATABRICKS_HTTP_PATH", "/sql/1.0/warehouses/148ccb90800933a1"),
             token=os.getenv("DATABRICKS_TOKEN", ""),
-            catalog=os.getenv("DATABRICKS_CATALOG", "welch"),
+            catalog=os.getenv("DATABRICKS_CATALOG", "scrap_catalog"),
             schema=os.getenv("DATABRICKS_SCHEMA", "scrap_demo"),
             dashboard_embed_url=os.getenv(
                 "DASHBOARD_EMBED_URL",

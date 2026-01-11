@@ -1,0 +1,78 @@
+# Databricks Asset Bundle Configuration
+# =====================================
+# Scrap Reduction Intelligence Platform
+# 
+# Deploy: databricks bundle deploy --target dev
+# Validate: databricks bundle validate
+# Run: databricks bundle run <job_name>
+
+bundle:
+  name: scrap-reduction-platform
+
+# Variables that can be overridden per target
+variables:
+  catalog:
+    description: Unity Catalog name
+    default: scrap_catalog
+  schema:
+    description: Schema name for all tables
+    default: scrap_demo
+  warehouse_id:
+    description: SQL Warehouse ID for queries
+    default: 288a7ec183eea397
+  # Service principal for production deployments
+  service_principal_name:
+    description: Service principal for running jobs and apps
+    default: ""
+
+# Include resource definitions from separate files
+include:
+  - resources/*.yml
+
+# Workspace settings
+workspace:
+  root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}
+
+# Target environments
+# Note: Set DATABRICKS_HOST environment variable or use `databricks auth login`
+targets:
+  # Development environment
+  dev:
+    mode: development
+    default: true
+    variables:
+      catalog: scrap_catalog
+      schema: scrap_demo
+    workspace:
+      host: https://fe-vm-industry-solutions-buildathon.cloud.databricks.com
+      profile: fe-vm-industry-solutions-buildathon
+
+  # Staging environment  
+  # staging:
+  #   mode: development
+  #   variables:
+  #     catalog: scrap_catalog_staging
+  #     schema: scrap_demo_staging
+  #   run_as:
+  #     user_name: ${workspace.current_user.userName}
+
+  # Production environment with Service Principal
+  # prod:
+  #   mode: production
+  #   variables:
+  #     catalog: scrap_catalog_prod
+  #     schema: scrap_demo_prod
+  #     service_principal_name: scrap-platform-prod-sp
+  #   
+  #   # Run jobs/apps as service principal (not user)
+  #   run_as:
+  #     service_principal_name: ${var.service_principal_name}
+  #   
+  #   # Bundle-level permissions (applies to all resources)
+  #   permissions:
+  #     - level: CAN_VIEW
+  #       group_name: users
+  #     - level: CAN_RUN
+  #       group_name: data-engineers
+  #     - level: CAN_MANAGE
+  #       service_principal_name: ${var.service_principal_name}

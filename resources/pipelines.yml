@@ -1,0 +1,55 @@
+# Delta Live Tables Pipeline Configuration
+# =========================================
+# Defines DLT pipelines for the medallion architecture
+# Uses serverless compute for cost efficiency and fast startup
+#
+# NOTE: The catalog must exist before deploying. Run scrap_setup_job first.
+
+resources:
+  pipelines:
+    # ============================================
+    # Main Scrap Data Pipeline (Silver + Gold)
+    # ============================================
+    scrap_dlt_pipeline:
+      name: "[${bundle.target}] Scrap Reduction - DLT Pipeline"
+      
+      # Pipeline development mode (for dev target)
+      development: true
+      
+      # Continuous vs triggered mode
+      continuous: false
+      
+      # Channel for runtime updates
+      channel: CURRENT
+      
+      # Photon acceleration for better performance
+      photon: true
+      
+      # Enable serverless compute
+      serverless: true
+      
+      # Catalog and schema for Unity Catalog integration
+      catalog: ${var.catalog}
+      target: ${var.schema}
+      
+      # Pipeline libraries (notebook sources)
+      libraries:
+        - notebook:
+            path: ../Scrap DLT Pipeline/2_DLT_Silver_Pipeline.py
+        - notebook:
+            path: ../Scrap DLT Pipeline/3_DLT_Gold_Pipeline.py
+      
+      # Pipeline configuration
+      configuration:
+        # Pass variables to notebooks
+        catalog: ${var.catalog}
+        schema: ${var.schema}
+        
+        # Enable schema evolution
+        pipelines.enableSchemaEvolution: "true"
+        
+        # Performance tuning
+        spark.databricks.delta.preview.enabled: "true"
+        spark.databricks.delta.optimizeWrite.enabled: "true"
+        spark.databricks.delta.autoCompact.enabled: "true"
+

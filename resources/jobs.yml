@@ -1,0 +1,130 @@
+# Databricks Jobs/Workflows
+# ==========================
+# Scrap Reduction Platform - Two-stage deployment
+#
+# Deployment order:
+#   1. Deploy bundle (creates jobs and pipeline definitions)
+#   2. Run scrap_setup_job (creates catalog, schema, bronze data)
+#   3. Run scrap_pipeline_job (DLT + ML training)
+
+resources:
+  jobs:
+    # ============================================
+    # Stage 1: Initial Setup Job
+    # ============================================
+    # Run this FIRST to create catalog/schema before DLT can run
+    scrap_setup_job:
+      name: "[${bundle.target}] Scrap Platform - Setup"
+      description: |
+        Initial setup job that creates the catalog, schema, and generates 
+        synthetic bronze data. Run this FIRST before the pipeline job.
+      
+      tags:
+        project: scrap-reduction
+        team: data-engineering
+        stage: setup
+      
+      # Define serverless environment
+      environments:
+        - environment_key: default
+          spec:
+            client: "4"
+          
+      tasks:
+        - task_key: generate_bronze_data
+          description: Generate 60K synthetic scrap records
+          notebook_task:
+            notebook_path: ../Setup and Bronze Create/0_Generate_Bronze_Data.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+          environment_key: default
+              
+        - task_key: setup_data_model
+          description: Validate data model and run sample queries
+          depends_on:
+            - task_key: generate_bronze_data
+          notebook_task:
+            notebook_path: ../Setup and Bronze Create/1_Setup_and_Data_Model.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+          environment_key: default
+    # ============================================
+    # Stage 2: DLT + ML Pipeline Job
+    # ============================================
+    # Run this AFTER setup job completes
+    scrap_pipeline_job:
+      name: "[${bundle.target}] Scrap Platform - Pipeline & ML"
+      description: |
+        Runs the DLT pipeline (Bronze → Silver → Gold) followed by 
+        all ML model training. Requires catalog/schema to exist.
+      
+      tags:
+        project: scrap-reduction
+        team: platform
+        stage: pipeline
+      
+      # Define serverless environment for ML tasks
+      environments:
+        - environment_key: ml
+          spec:
+            client: "4"
+            dependencies:
+              - prophet
+              - scikit-learn
+              - mlflow
+      
+      tasks:
+        # DLT Pipeline
+        - task_key: run_dlt_pipeline
+          description: Run DLT pipeline for Silver and Gold transformations
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.scrap_dlt_pipeline.id}
+            full_refresh: false
+
+        # ML Training (after DLT)
+        - task_key: scrap_forecasting
+          description: Train Prophet time series models for scrap forecasting
+          depends_on:
+            - task_key: run_dlt_pipeline
+          notebook_task:
+            notebook_path: ../ML Models/1_Scrap_Forecasting.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+          environment_key: ml
+              
+        - task_key: root_cause_analysis
+          description: NLP and classification for 8D root cause validation
+          depends_on:
+            - task_key: scrap_forecasting
+          notebook_task:
+            notebook_path: ../ML Models/2_Root_Cause_8D_Validation.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+          environment_key: ml
+              
+        - task_key: advanced_ml_models
+          description: Anomaly detection, clustering, and supplier risk scoring
+          depends_on:
+            - task_key: root_cause_analysis
+          notebook_task:
+            notebook_path: ../ML Models/3_Advanced_ML_Models.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+          environment_key: ml
+
+        - task_key: feature_root_cause
+          description: Feature-based root cause analysis
+          depends_on:
+            - task_key: advanced_ml_models
+          notebook_task:
+            notebook_path: ../ML Models/4_Feature_Based_Root_Cause_Analysis.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+          environment_key: ml
+

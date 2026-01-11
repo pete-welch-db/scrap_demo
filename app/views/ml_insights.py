@@ -550,7 +550,7 @@ def render_ml_insights_page():
         forecast_df['forecast_date'] = pd.to_datetime(forecast_df['forecast_date'])
         
         # Forecast chart
-        st.plotly_chart(plot_forecast(forecast_df), use_container_width=True)
+        st.plotly_chart(plot_forecast(forecast_df), width='stretch')
         
         # Key metrics
         col1, col2, col3, col4 = st.columns(4)
@@ -580,7 +580,7 @@ def render_ml_insights_page():
             **Training Data:** 3 years of historical scrap data  
             **Seasonality:** Yearly, Weekly, Holiday effects  
             **Forecast Horizon:** 90 days  
-            **Registered Model:** `welch.scrap_demo.scrap_total_forecast_model`
+            **Registered Model:** `scrap_catalog.scrap_demo.scrap_total_forecast_model`
             """)
     
     # =========================================================================
@@ -633,7 +633,7 @@ def render_ml_insights_page():
         col_left, col_right = st.columns([2, 1])
         
         with col_left:
-            st.plotly_chart(plot_root_cause_confusion(rc_df), use_container_width=True)
+            st.plotly_chart(plot_root_cause_confusion(rc_df), width='stretch')
         
         with col_right:
             st.markdown("#### 🎯 High-Confidence Disagreements")
@@ -686,7 +686,7 @@ def render_ml_insights_page():
             st.metric("Avg Anomaly Score", f"{avg_score:.2f}")
         
         # Timeline chart
-        st.plotly_chart(plot_anomaly_timeline(anomaly_df), use_container_width=True)
+        st.plotly_chart(plot_anomaly_timeline(anomaly_df), width='stretch')
         
         # Anomaly breakdown
         col_left, col_right = st.columns(2)
@@ -697,7 +697,7 @@ def render_ml_insights_page():
                 'total_scrap_cost': 'sum',
                 'anomaly_score': 'count'
             }).rename(columns={'anomaly_score': 'count'}).sort_values('total_scrap_cost', ascending=False)
-            st.dataframe(plant_summary, use_container_width=True)
+            st.dataframe(plant_summary, width='stretch')
         
         with col_right:
             st.markdown("#### By Defect Category")
@@ -705,14 +705,14 @@ def render_ml_insights_page():
                 'total_scrap_cost': 'sum',
                 'anomaly_score': 'count'
             }).rename(columns={'anomaly_score': 'count'}).sort_values('total_scrap_cost', ascending=False)
-            st.dataframe(defect_summary, use_container_width=True)
+            st.dataframe(defect_summary, width='stretch')
         
         # Recent anomalies table
         st.markdown("#### 📋 Recent Anomalies")
         display_cols = ['transaction_date', 'plant', 'defect_category', 'total_scrap_cost', 'anomaly_reason']
         st.dataframe(
             anomaly_df[display_cols].head(20),
-            use_container_width=True,
+            width='stretch',
             hide_index=True
         )
     
@@ -752,14 +752,14 @@ def render_ml_insights_page():
             st.metric("🔴 Critical", risk_counts.get('Critical', 0))
         
         # Risk scatter plot
-        st.plotly_chart(plot_supplier_risk(risk_df), use_container_width=True)
+        st.plotly_chart(plot_supplier_risk(risk_df), width='stretch')
         
         # Detailed table
         st.markdown("#### 📊 Supplier Risk Details")
         st.dataframe(
             risk_df[['supplier_name', 'tier', 'quality_score', 'delivery_score', 
                     'overall_risk_score', 'risk_category', 'recommendation']],
-            use_container_width=True,
+            width='stretch',
             hide_index=True
         )
     
@@ -857,11 +857,11 @@ def render_ml_insights_page():
             
             | Model | Purpose | Status |
             |-------|---------|--------|
-            | `welch.scrap_demo.scrap_total_forecast_model` | Time series forecasting | ✅ Production |
-            | `welch.scrap_demo.root_cause_classifier` | Root cause prediction | ✅ Production |
-            | `welch.scrap_demo.anomaly_detector` | Anomaly detection | ✅ Production |
-            | `welch.scrap_demo.supplier_risk_scorer` | Risk assessment | ✅ Production |
-            | `welch.scrap_demo.supplier_reallocation_optimizer` | Reallocation recommendations | ✅ Production |
+            | `scrap_catalog.scrap_demo.scrap_total_forecast_model` | Time series forecasting | ✅ Production |
+            | `scrap_catalog.scrap_demo.root_cause_classifier` | Root cause prediction | ✅ Production |
+            | `scrap_catalog.scrap_demo.anomaly_detector` | Anomaly detection | ✅ Production |
+            | `scrap_catalog.scrap_demo.supplier_risk_scorer` | Risk assessment | ✅ Production |
+            | `scrap_catalog.scrap_demo.supplier_reallocation_optimizer` | Reallocation recommendations | ✅ Production |
             
             **MLflow Experiment:** Default Notebook Experiment (Git folder)
             """)
