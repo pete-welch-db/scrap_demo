@@ -5,19 +5,27 @@ name: scrap-reduction-intelligence
 description: Scrap Reduction Intelligence Platform - Dashboards, What-If Analysis, AI Assistant
 
 # Entry point
-# <<<<<<< feature/dbapps
-# command: ["streamlit", "run", "app.py"]
+command: ["streamlit", "run", "app.py"]
 
-# # Environment variables
-# env:
-#   - name: ENVIRONMENT
-#     value: "DBX"
-# =======
-# command: ["streamlit", "run", "app.py", "--server.port", "8000", "--server.headless", "true"]
+# Environment variables
+env:
+  - name: ENVIRONMENT
+    value: "DBX"
+  - name: DATABRICKS_HOST
+    value: "fe-vm-industry-solutions-buildathon.cloud.databricks.com"
+  - name: DATABRICKS_HTTP_PATH
+    value: "/sql/1.0/warehouses/b9637dd46c71dea3"
+  - name: DATABRICKS_CATALOG
+    value: "scrap_catalog"
+  - name: DATABRICKS_SCHEMA
+    value: "scrap_demo"
+  - name: GENIE_SPACE_ID
+    value: "01f0ee7c90c9160b80fd7567dc1e3fca"
+  - name: DASHBOARD_EMBED_URL
+    value: "https://fe-vm-industry-solutions-buildathon.cloud.databricks.com/embed/dashboardsv3/01f0ee8e089810f5956650e65d9f4836?o=237438879023004"
 
-# # Environment variables are automatically set by Databricks Apps runtime
-# # (DATABRICKS_HOST, DATABRICKS_TOKEN, DATABRICKS_WAREHOUSE_ID)
-# >>>>>>> main
+# Environment variables are automatically set by Databricks Apps runtime
+# (DATABRICKS_HOST, DATABRICKS_TOKEN, DATABRICKS_WAREHOUSE_ID)
 
 # Resources
 resources:

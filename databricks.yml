@@ -47,6 +47,17 @@ targets:
       host: https://fe-vm-industry-solutions-buildathon.cloud.databricks.com
       profile: fe-vm-industry-solutions-buildathon
 
+  # Azure workspace environment
+  azure:
+    mode: development
+    variables:
+      catalog: welch
+      schema: scrap_demo
+    workspace:
+      host: https://adb-984752964297111.11.azuredatabricks.net
+      profile: azure
+      root_path: /Workspace/Users/noah.soprala@databricks.com/apps/nsoprala-scrap-demo
+
   # Staging environment  
   # staging:
   #   mode: development
