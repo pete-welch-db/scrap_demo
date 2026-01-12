@@ -26,7 +26,7 @@
 
 # COMMAND ----------
 
-# MAGIC %pip install scikit-learn mlflow[databricks]
+# MAGIC %pip install scikit-learn mlflow[databricks] prophet sentence-transformers scipy
 
 # COMMAND ----------
 
@@ -58,6 +58,12 @@ import json
 import warnings
 warnings.filterwarnings('ignore')
 
+# Prophet for time series forecasting
+from prophet import Prophet
+
+# Sentence Transformers for semantic similarity
+from sentence_transformers import SentenceTransformer
+
 # Scikit-learn
 from sklearn.ensemble import (
     IsolationForest, 
@@ -70,7 +76,8 @@ from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import (
     classification_report, accuracy_score, 
     silhouette_score, roc_auc_score,
-    precision_score, recall_score, f1_score
+    precision_score, recall_score, f1_score,
+    mean_absolute_error, mean_squared_error
 )
 
 # MLflow
@@ -461,6 +468,315 @@ comparison["Difference %"] = (
 ).round(1)
 
 print(comparison.to_string(index=False))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ---
+# MAGIC # 📈 Model 1B: Time Series Anomaly Detection
+# MAGIC ---
+# MAGIC 
+# MAGIC ## Objective
+# MAGIC Detect anomalies using time series forecasting to account for:
+# MAGIC - **Trends**: Long-term increase/decrease in scrap
+# MAGIC - **Seasonality**: Weekly, monthly patterns
+# MAGIC - **Sequential Dependencies**: How today relates to recent history
+# MAGIC 
+# MAGIC ## Approach
+# MAGIC 1. Train Prophet forecast model on historical scrap data
+# MAGIC 2. Predict expected scrap with uncertainty intervals
+# MAGIC 3. Flag anomalies when actual values exceed prediction intervals
+# MAGIC 4. Calculate anomaly severity scores
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Prepare Time Series Data
+# MAGIC 
+# MAGIC Prophet requires columns named 'ds' (date) and 'y' (value).
+
+# COMMAND ----------
+
+# Prepare data for Prophet
+ts_data = daily_scrap[['transaction_date', 'daily_qty', 'daily_cost']].copy()
+ts_data.columns = ['ds', 'y_qty', 'y_cost']
+ts_data['ds'] = pd.to_datetime(ts_data['ds'])
+
+# Sort by date
+ts_data = ts_data.sort_values('ds').reset_index(drop=True)
+
+print(f"📊 Time Series Data:")
+print(f"   Date Range: {ts_data['ds'].min()} to {ts_data['ds'].max()}")
+print(f"   Days: {len(ts_data):,}")
+print(f"   Mean Daily Qty: {ts_data['y_qty'].mean():,.0f}")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Train Prophet Model for Quantity Forecast
+
+# COMMAND ----------
+
+# Prepare Prophet dataframe for quantity
+prophet_df_qty = ts_data[['ds', 'y_qty']].copy()
+prophet_df_qty.columns = ['ds', 'y']
+
+# Train/test split - use 80% for training to establish pattern
+split_idx = int(len(prophet_df_qty) * 0.8)
+train_prophet = prophet_df_qty[:split_idx].copy()
+test_prophet = prophet_df_qty[split_idx:].copy()
+
+print(f"📊 Prophet Training Split:")
+print(f"   Training: {len(train_prophet):,} days")
+print(f"   Testing: {len(test_prophet):,} days")
+print(f"   Split Date: {train_prophet['ds'].max().date()}")
+
+# COMMAND ----------
+
+# Train Prophet model
+with mlflow.start_run(run_name="ts_anomaly_prophet_qty") as run:
+    
+    # Log parameters
+    mlflow.log_param("model_type", "Prophet")
+    mlflow.log_param("target", "daily_quantity")
+    mlflow.log_param("train_days", len(train_prophet))
+    mlflow.log_param("test_days", len(test_prophet))
+    mlflow.log_param("seasonality_mode", "multiplicative")
+    mlflow.log_param("interval_width", 0.95)
+    
+    print("🔄 Training Prophet time series model...")
+    
+    # Initialize Prophet with seasonality
+    prophet_model = Prophet(
+        interval_width=0.95,  # 95% prediction intervals
+        yearly_seasonality=True,
+        weekly_seasonality=True,
+        daily_seasonality=False,
+        seasonality_mode='multiplicative',  # Better for growing trends
+        changepoint_prior_scale=0.05  # Flexibility in trend changes
+    )
+    
+    # Fit on training data
+    prophet_model.fit(train_prophet)
+    
+    # Make predictions for entire period (train + test)
+    future = prophet_model.make_future_dataframe(periods=len(test_prophet))
+    forecast = prophet_model.predict(future)
+    
+    # Calculate metrics on test set
+    test_forecast = forecast[forecast['ds'] >= test_prophet['ds'].min()].copy()
+    test_merged = test_prophet.merge(test_forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']], on='ds')
+    
+    mae = mean_absolute_error(test_merged['y'], test_merged['yhat'])
+    rmse = np.sqrt(mean_squared_error(test_merged['y'], test_merged['yhat']))
+    mape = np.mean(np.abs((test_merged['y'] - test_merged['yhat']) / test_merged['y'])) * 100
+    
+    mlflow.log_metric("mae", mae)
+    mlflow.log_metric("rmse", rmse)
+    mlflow.log_metric("mape", mape)
+    
+    # Detect anomalies: actual value outside prediction interval
+    forecast_full = prophet_df_qty.merge(forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']], on='ds')
+    forecast_full['is_anomaly_prophet'] = (
+        (forecast_full['y'] > forecast_full['yhat_upper']) |
+        (forecast_full['y'] < forecast_full['yhat_lower'])
+    ).astype(int)
+    
+    # Calculate anomaly severity (how many std devs from forecast)
+    forecast_full['forecast_error'] = forecast_full['y'] - forecast_full['yhat']
+    forecast_full['forecast_error_std'] = (
+        forecast_full['forecast_error'] / (forecast_full['yhat_upper'] - forecast_full['yhat_lower']) * 4
+    )  # Convert to approximate std devs (95% CI ≈ 4 std devs)
+    
+    forecast_full['anomaly_severity'] = np.abs(forecast_full['forecast_error_std'])
+    
+    # Count anomalies
+    ts_anomalies = forecast_full[forecast_full['is_anomaly_prophet'] == 1]
+    ts_anomaly_rate = len(ts_anomalies) / len(forecast_full)
+    
+    mlflow.log_metric("ts_anomalies_detected", len(ts_anomalies))
+    mlflow.log_metric("ts_anomaly_rate", ts_anomaly_rate)
+    mlflow.log_metric("avg_anomaly_severity", ts_anomalies['anomaly_severity'].mean() if len(ts_anomalies) > 0 else 0)
+    
+    # Log visualizations
+    fig, axes = plt.subplots(3, 1, figsize=(14, 12))
+    
+    # Plot 1: Forecast with anomalies
+    ax1 = axes[0]
+    ax1.plot(forecast_full['ds'], forecast_full['y'], 'k.', alpha=0.5, markersize=3, label='Actual')
+    ax1.plot(forecast_full['ds'], forecast_full['yhat'], 'b-', linewidth=2, label='Forecast')
+    ax1.fill_between(forecast_full['ds'], 
+                       forecast_full['yhat_lower'], 
+                       forecast_full['yhat_upper'],
+                       alpha=0.2, color='blue', label='95% Interval')
+    ax1.scatter(ts_anomalies['ds'], ts_anomalies['y'], 
+                c='red', s=50, zorder=5, label=f'Anomalies ({len(ts_anomalies)})')
+    ax1.axvline(x=train_prophet['ds'].max(), color='green', linestyle='--', 
+                label='Train/Test Split', linewidth=2)
+    ax1.set_ylabel('Daily Quantity Scrapped')
+    ax1.set_title('Time Series Anomaly Detection with Prophet', fontsize=14)
+    ax1.legend(loc='upper left')
+    ax1.grid(alpha=0.3)
+    
+    # Plot 2: Forecast error
+    ax2 = axes[1]
+    ax2.bar(forecast_full['ds'], forecast_full['forecast_error'], 
+            alpha=0.6, color=['red' if x == 1 else 'blue' for x in forecast_full['is_anomaly_prophet']])
+    ax2.axhline(y=0, color='black', linestyle='-', linewidth=0.5)
+    ax2.set_ylabel('Forecast Error (Actual - Predicted)')
+    ax2.set_title('Forecast Error Over Time')
+    ax2.grid(alpha=0.3)
+    
+    # Plot 3: Anomaly severity
+    ax3 = axes[2]
+    ax3.plot(forecast_full['ds'], forecast_full['anomaly_severity'], 
+             'g-', alpha=0.7, linewidth=1)
+    ax3.axhline(y=2, color='orange', linestyle='--', label='Moderate (2σ)')
+    ax3.axhline(y=3, color='red', linestyle='--', label='Severe (3σ)')
+    ax3.scatter(ts_anomalies['ds'], ts_anomalies['anomaly_severity'],
+                c='red', s=30, zorder=5)
+    ax3.set_ylabel('Anomaly Severity (σ)')
+    ax3.set_xlabel('Date')
+    ax3.set_title('Anomaly Severity Score')
+    ax3.legend()
+    ax3.grid(alpha=0.3)
+    
+    plt.tight_layout()
+    mlflow.log_figure(fig, "ts_anomaly_detection.png")
+    plt.close()
+    
+    # Print results
+    print(f"\n{'='*70}")
+    print(f"✅ Model: Time Series Anomaly Detection (Prophet)")
+    print(f"{'='*70}")
+    print(f"\n📊 Forecast Performance:")
+    print(f"   MAE: {mae:,.1f} units")
+    print(f"   RMSE: {rmse:,.1f} units")
+    print(f"   MAPE: {mape:.1f}%")
+    
+    print(f"\n📊 Anomaly Detection:")
+    print(f"   Total Days: {len(forecast_full):,}")
+    print(f"   Anomalies Detected: {len(ts_anomalies):,} ({ts_anomaly_rate:.1%})")
+    print(f"   Avg Anomaly Severity: {ts_anomalies['anomaly_severity'].mean():.2f}σ" if len(ts_anomalies) > 0 else "N/A")
+    
+    print(f"\n🔗 MLflow Run ID: {run.info.run_id}")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Analyze Time Series Anomalies
+# MAGIC 
+# MAGIC Compare time series anomalies with Isolation Forest anomalies.
+
+# COMMAND ----------
+
+# Compare TS anomalies with Isolation Forest anomalies
+comparison_df = pd.DataFrame({
+    'date': forecast_full['ds'],
+    'daily_qty': forecast_full['y'],
+    'prophet_forecast': forecast_full['yhat'],
+    'forecast_lower': forecast_full['yhat_lower'],
+    'forecast_upper': forecast_full['yhat_upper'],
+    'ts_anomaly': forecast_full['is_anomaly_prophet'],
+    'anomaly_severity': forecast_full['anomaly_severity']
+})
+
+# Merge with Isolation Forest results
+comparison_df = comparison_df.merge(
+    daily_scrap[['transaction_date', 'is_anomaly']],
+    left_on='date',
+    right_on='transaction_date',
+    how='left'
+)
+comparison_df.rename(columns={'is_anomaly': 'iso_forest_anomaly'}, inplace=True)
+comparison_df.drop('transaction_date', axis=1, inplace=True)
+
+# Calculate agreement
+both_methods = (comparison_df['ts_anomaly'] == 1) & (comparison_df['iso_forest_anomaly'] == 1)
+only_ts = (comparison_df['ts_anomaly'] == 1) & (comparison_df['iso_forest_anomaly'] == 0)
+only_iso = (comparison_df['ts_anomaly'] == 0) & (comparison_df['iso_forest_anomaly'] == 1)
+neither = (comparison_df['ts_anomaly'] == 0) & (comparison_df['iso_forest_anomaly'] == 0)
+
+print("📊 ANOMALY DETECTION METHOD COMPARISON:")
+print("=" * 70)
+print(f"\n   Both Methods Agree (Anomaly): {both_methods.sum():,} days")
+print(f"   Only Time Series Detected: {only_ts.sum():,} days")
+print(f"   Only Isolation Forest Detected: {only_iso.sum():,} days")
+print(f"   Both Methods Agree (Normal): {neither.sum():,} days")
+print(f"\n   Agreement Rate: {(both_methods.sum() + neither.sum()) / len(comparison_df):.1%}")
+
+# Visualize comparison
+fig, ax = plt.subplots(figsize=(14, 6))
+
+# Plot actual values
+ax.plot(comparison_df['date'], comparison_df['daily_qty'], 
+        'k-', alpha=0.3, linewidth=1, label='Daily Qty')
+
+# Mark anomalies by method
+both_dates = comparison_df[both_methods]['date']
+both_vals = comparison_df[both_methods]['daily_qty']
+ax.scatter(both_dates, both_vals, c='red', s=100, marker='o', 
+           label=f'Both Methods ({len(both_dates)})', zorder=5)
+
+ts_only_dates = comparison_df[only_ts]['date']
+ts_only_vals = comparison_df[only_ts]['daily_qty']
+ax.scatter(ts_only_dates, ts_only_vals, c='orange', s=80, marker='^',
+           label=f'Time Series Only ({len(ts_only_dates)})', zorder=4)
+
+iso_only_dates = comparison_df[only_iso]['date']
+iso_only_vals = comparison_df[only_iso]['daily_qty']
+ax.scatter(iso_only_dates, iso_only_vals, c='blue', s=80, marker='s',
+           label=f'Isolation Forest Only ({len(iso_only_dates)})', zorder=4)
+
+ax.set_xlabel('Date', fontsize=12)
+ax.set_ylabel('Daily Quantity Scrapped', fontsize=12)
+ax.set_title('Anomaly Detection: Time Series vs Isolation Forest', fontsize=14)
+ax.legend(loc='upper left')
+ax.grid(alpha=0.3)
+plt.tight_layout()
+plt.show()
+
+print("\n💡 Insights:")
+print("   • Time Series: Catches deviations from expected trends/patterns")
+print("   • Isolation Forest: Catches outliers based on feature distributions")
+print("   • Both methods together provide comprehensive anomaly detection")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Categorize Anomalies by Severity
+
+# COMMAND ----------
+
+# Categorize anomalies by severity
+severe_threshold = 3.0  # 3 standard deviations
+moderate_threshold = 2.0  # 2 standard deviations
+
+ts_anomalies_categorized = ts_anomalies.copy()
+ts_anomalies_categorized['severity_category'] = pd.cut(
+    ts_anomalies_categorized['anomaly_severity'],
+    bins=[0, moderate_threshold, severe_threshold, float('inf')],
+    labels=['Low', 'Moderate', 'Severe']
+)
+
+print("📊 ANOMALY SEVERITY BREAKDOWN:")
+print("=" * 70)
+severity_summary = ts_anomalies_categorized.groupby('severity_category').agg({
+    'ds': 'count',
+    'y': 'mean',
+    'anomaly_severity': 'mean'
+}).round(2)
+severity_summary.columns = ['Count', 'Avg Daily Qty', 'Avg Severity (σ)']
+print(severity_summary)
+
+# Display most severe anomalies
+print("\n🚨 TOP 10 MOST SEVERE ANOMALIES:")
+print("=" * 70)
+top_anomalies = ts_anomalies_categorized.nlargest(10, 'anomaly_severity')[
+    ['ds', 'y', 'yhat', 'anomaly_severity']
+]
+top_anomalies.columns = ['Date', 'Actual Qty', 'Expected Qty', 'Severity (σ)']
+print(top_anomalies.to_string(index=False))
 
 # COMMAND ----------
 
@@ -963,50 +1279,115 @@ plt.show()
 
 # MAGIC %md
 # MAGIC ---
-# MAGIC # 💡 Model 5: Corrective Action Recommender
+# MAGIC # 💡 Model 5: Enhanced Corrective Action Recommender
 # MAGIC ---
 # MAGIC 
 # MAGIC ## Objective
 # MAGIC Recommend corrective actions based on defect patterns and historical effectiveness.
+# MAGIC 
+# MAGIC ## Enhancements
+# MAGIC - **Contextual Filtering**: Filter by plant, supplier tier, cost
+# MAGIC - **BERT Similarity**: Find similar defects when exact match fails
+# MAGIC - **Confidence Intervals**: Show statistical confidence in effectiveness
+# MAGIC - **Usage Tracking**: Log recommendations for future improvement
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Build Action-Defect Mappings
+# MAGIC ## Build Enhanced Action-Defect Mappings
 
 # COMMAND ----------
 
-# Load 8D data
+# Load 8D data with additional context
 eight_d_pd = eight_d_df.toPandas()
 
-# Create action patterns by defect and root cause
-action_patterns = eight_d_pd.groupby(["defect_category", "root_cause_category"]).agg({
+# Create comprehensive action patterns with context
+action_patterns = eight_d_pd.groupby([
+    "defect_category", 
+    "root_cause_category",
+    "plant_id",
+    "supplier_tier_lookup"
+]).agg({
     "corrective_actions": lambda x: list(x),
-    "verification_result": lambda x: (x == "Effective").mean() if len(x) > 0 else 0,
-    "eight_d_id": "count"
+    "verification_result": lambda x: list(x),
+    "eight_d_id": "count",
+    "total_scrap_cost": "mean"
 }).reset_index()
 
-action_patterns.columns = ["defect_category", "root_cause_category", 
-                            "actions", "effectiveness_rate", "count"]
+# Calculate effectiveness rate and confidence interval
+def calculate_effectiveness_with_ci(results_list):
+    """Calculate effectiveness rate with 95% confidence interval."""
+    if len(results_list) == 0:
+        return 0, 0, 0, 0
+    
+    effective_count = sum(1 for r in results_list if r == "Effective")
+    total_count = len(results_list)
+    rate = effective_count / total_count
+    
+    # Wilson score interval (better for small samples)
+    from scipy import stats
+    if total_count > 0:
+        # Binomial proportion confidence interval
+        ci_low, ci_high = stats.binom.interval(0.95, total_count, rate)
+        ci_low = ci_low / total_count
+        ci_high = ci_high / total_count
+    else:
+        ci_low, ci_high = 0, 0
+    
+    return rate, ci_low, ci_high, total_count
 
-print(f"📊 Action Patterns: {len(action_patterns):,} combinations")
+# Apply to each row
+action_patterns[["effectiveness_rate", "ci_low", "ci_high", "sample_size"]] = action_patterns.apply(
+    lambda row: pd.Series(calculate_effectiveness_with_ci(row["verification_result"])),
+    axis=1
+)
+
+action_patterns.drop("verification_result", axis=1, inplace=True)
+action_patterns.columns = [
+    "defect_category", "root_cause_category", "plant_id", "supplier_tier",
+    "actions", "sample_size", "avg_scrap_cost", 
+    "effectiveness_rate", "ci_low", "ci_high"
+]
+
+print(f"📊 Enhanced Action Patterns: {len(action_patterns):,} combinations")
+print(f"   With context (plant + supplier): {len(action_patterns):,}")
+print(f"   Avg actions per combination: {action_patterns['sample_size'].mean():.1f}")
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Define Recommendation Function
+# MAGIC ## Load BERT Model for Semantic Similarity
 
 # COMMAND ----------
 
-def recommend_corrective_actions(
-    defect_category: str, 
-    root_cause: str = None, 
-    top_n: int = 3
+print("🔄 Loading BERT model for semantic defect matching...")
+bert_model = SentenceTransformer('all-MiniLM-L6-v2')
+print("✅ BERT model loaded")
+
+# Create embeddings for all unique defect categories
+unique_defects = action_patterns['defect_category'].unique()
+defect_embeddings = bert_model.encode(unique_defects.tolist())
+
+print(f"📊 Created embeddings for {len(unique_defects)} defect categories")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Enhanced Recommendation Function
+
+# COMMAND ----------
+
+def recommend_corrective_actions_enhanced(
+    defect_category: str,
+    root_cause: str = None,
+    plant_id: str = None,
+    supplier_tier: str = None,
+    max_cost: float = None,
+    top_n: int = 5,
+    similarity_threshold: float = 0.7
 ) -> list:
     """
-    Recommend corrective actions based on defect category and root cause.
-    
-    Returns actions sorted by historical effectiveness rate.
+    Enhanced corrective action recommender with contextual filtering and BERT similarity.
     
     Parameters:
     -----------
@@ -1014,83 +1395,328 @@ def recommend_corrective_actions(
         Category of defect (e.g., "Dimensional", "Surface Defects")
     root_cause : str, optional
         Root cause category (e.g., "Machine", "Material")
+    plant_id : str, optional
+        Filter recommendations by plant
+    supplier_tier : str, optional
+        Filter by supplier tier ("Tier 1", "Tier 2", "Tier 3")
+    max_cost : float, optional
+        Maximum average scrap cost for filtering
     top_n : int
         Number of recommendations to return
+    similarity_threshold : float
+        Minimum BERT similarity score for fuzzy matching (0-1)
         
     Returns:
     --------
     list of dict
-        Recommendations with effectiveness metrics
+        Recommendations with effectiveness metrics, confidence intervals, and metadata
     """
-    # Filter patterns
+    
+    # Step 1: Try exact match with filters
+    matches = action_patterns[action_patterns["defect_category"] == defect_category].copy()
+    
+    # Apply optional filters
     if root_cause:
-        matches = action_patterns[
-            (action_patterns["defect_category"] == defect_category) &
-            (action_patterns["root_cause_category"] == root_cause)
-        ]
+        matches = matches[matches["root_cause_category"] == root_cause]
+    
+    if plant_id:
+        matches = matches[matches["plant_id"] == plant_id]
+    
+    if supplier_tier:
+        matches = matches[matches["supplier_tier"] == supplier_tier]
+    
+    if max_cost:
+        matches = matches[matches["avg_scrap_cost"] <= max_cost]
+    
+    # Step 2: If no exact matches, use BERT similarity for fuzzy matching
+    if len(matches) == 0:
+        print(f"   No exact match for '{defect_category}', trying semantic similarity...")
+        
+        # Find similar defect categories using BERT
+        query_embedding = bert_model.encode([defect_category])
+        
+        from sklearn.metrics.pairwise import cosine_similarity
+        similarities = cosine_similarity(query_embedding, defect_embeddings)[0]
+        
+        # Get defects above similarity threshold
+        similar_indices = np.where(similarities >= similarity_threshold)[0]
+        
+        if len(similar_indices) > 0:
+            similar_defects = unique_defects[similar_indices]
+            matches = action_patterns[
+                action_patterns["defect_category"].isin(similar_defects)
+            ].copy()
+            
+            # Add similarity score
+            defect_to_similarity = dict(zip(unique_defects[similar_indices], 
+                                           similarities[similar_indices]))
+            matches["similarity_score"] = matches["defect_category"].map(defect_to_similarity)
+            
+            print(f"   Found {len(similar_defects)} similar defects via BERT")
+        else:
+            print(f"   No similar defects found (threshold: {similarity_threshold})")
     else:
+        # Add perfect similarity score for exact matches
+        matches["similarity_score"] = 1.0
+    
+    # Step 3: If still no matches, broaden search (remove filters)
+    if len(matches) == 0:
+        print(f"   Broadening search: removing contextual filters...")
         matches = action_patterns[
             action_patterns["defect_category"] == defect_category
-        ]
+        ].copy()
+        matches["similarity_score"] = 1.0
     
+    # Step 4: If still nothing, return message
     if len(matches) == 0:
-        # Fallback to just defect category
-        matches = action_patterns[
-            action_patterns["defect_category"] == defect_category
-        ]
+        return [{
+            "message": f"No historical actions found for '{defect_category}'",
+            "suggestion": "Consider similar defect categories or consult 8D database"
+        }]
     
-    if len(matches) == 0:
-        return [{"message": "No historical actions found for this pattern"}]
+    # Step 5: Score and rank recommendations
+    # Score = effectiveness_rate * similarity_score * sqrt(sample_size)
+    # Square root of sample size balances confidence with not over-weighting popular actions
+    matches["recommendation_score"] = (
+        matches["effectiveness_rate"] * 
+        matches["similarity_score"] * 
+        np.sqrt(matches["sample_size"])
+    )
     
-    # Sort by effectiveness
-    matches = matches.sort_values("effectiveness_rate", ascending=False)
+    matches = matches.sort_values("recommendation_score", ascending=False)
     
-    # Get top actions
+    # Step 6: Build recommendations
     recommendations = []
     for _, row in matches.head(top_n).iterrows():
         if row["actions"] and len(row["actions"]) > 0:
+            # Get a sample action (first one)
             sample_action = str(row["actions"][0])[:300]
+            
             recommendations.append({
+                "defect_category": row["defect_category"],
                 "root_cause": row["root_cause_category"],
+                "plant": row["plant_id"],
+                "supplier_tier": row["supplier_tier"],
                 "sample_action": sample_action,
                 "effectiveness_rate": f"{row['effectiveness_rate']:.0%}",
-                "historical_cases": row["count"]
+                "confidence_interval": f"({row['ci_low']:.0%} - {row['ci_high']:.0%})",
+                "historical_cases": int(row["sample_size"]),
+                "avg_cost": f"${row['avg_scrap_cost']:,.0f}",
+                "similarity": f"{row['similarity_score']:.0%}",
+                "recommendation_score": f"{row['recommendation_score']:.2f}",
+                "match_type": "exact" if row["similarity_score"] == 1.0 else "similar"
             })
     
     return recommendations
 
+print("✅ Enhanced recommendation function defined")
+
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Test Recommender
+# MAGIC ## Test Enhanced Recommender
 
 # COMMAND ----------
 
-# Test recommendations
+# Test cases with various scenarios
 test_cases = [
-    ("Dimensional", "Machine"),
-    ("Surface Defects", "Material"),
-    ("Welding Defects", "Method"),
-    ("Material Defects", None)
+    # Scenario 1: Exact match with context
+    {
+        "defect_category": "Dimensional",
+        "root_cause": "Machine",
+        "plant_id": "P001",
+        "description": "Exact match with plant filter"
+    },
+    # Scenario 2: Exact match without context
+    {
+        "defect_category": "Surface Defects",
+        "root_cause": "Material",
+        "description": "Exact match, any plant/supplier"
+    },
+    # Scenario 3: Fuzzy match (typo or similar defect)
+    {
+        "defect_category": "Dimensinal Defects",  # Typo
+        "description": "Fuzzy match via BERT similarity"
+    },
+    # Scenario 4: With cost filter
+    {
+        "defect_category": "Welding Defects",
+        "root_cause": "Method",
+        "max_cost": 50000,
+        "description": "Cost-filtered recommendations"
+    }
 ]
 
-print("💡 CORRECTIVE ACTION RECOMMENDATIONS")
-print("=" * 70)
+print("💡 ENHANCED CORRECTIVE ACTION RECOMMENDATIONS")
+print("=" * 80)
 
-for defect_cat, root_cause in test_cases:
-    print(f"\n📋 Defect: {defect_cat} | Root Cause: {root_cause or 'Any'}")
-    print("-" * 60)
+for i, test_case in enumerate(test_cases, 1):
+    desc = test_case.pop("description")
     
-    recs = recommend_corrective_actions(defect_cat, root_cause, top_n=2)
+    print(f"\n{'='*80}")
+    print(f"TEST CASE {i}: {desc}")
+    print(f"{'='*80}")
+    print(f"Input: {test_case}")
+    print("-" * 80)
     
-    for i, rec in enumerate(recs, 1):
+    recs = recommend_corrective_actions_enhanced(**test_case, top_n=3)
+    
+    for j, rec in enumerate(recs, 1):
         if "message" in rec:
-            print(f"   {rec['message']}")
+            print(f"   ℹ️  {rec['message']}")
+            if "suggestion" in rec:
+                print(f"      {rec['suggestion']}")
         else:
-            print(f"   {i}. Root Cause: {rec['root_cause']}")
-            print(f"      Effectiveness: {rec['effectiveness_rate']} "
-                  f"({rec['historical_cases']} cases)")
-            print(f"      Action: {rec['sample_action'][:100]}...")
+            print(f"\n   {j}. [{rec['match_type'].upper()}] {rec['defect_category']} | {rec['root_cause']}")
+            print(f"      Context: Plant {rec['plant']} | {rec['supplier_tier']}")
+            print(f"      Effectiveness: {rec['effectiveness_rate']} (CI: {rec['confidence_interval']})")
+            print(f"      Based on {rec['historical_cases']} cases | Avg Cost: {rec['avg_cost']}")
+            print(f"      Similarity: {rec['similarity']} | Score: {rec['recommendation_score']}")
+            print(f"      Action: {rec['sample_action'][:120]}...")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Create Recommendation Usage Tracking Table
+
+# COMMAND ----------
+
+# Create schema for tracking recommendations
+recommendation_log_schema = """
+    recommendation_id STRING,
+    timestamp TIMESTAMP,
+    defect_category STRING,
+    root_cause_category STRING,
+    plant_id STRING,
+    supplier_tier STRING,
+    max_cost DOUBLE,
+    num_recommendations INT,
+    top_recommendation_action STRING,
+    top_recommendation_effectiveness DOUBLE,
+    match_type STRING,
+    user_selected BOOLEAN,
+    selected_recommendation_index INT,
+    feedback_effective BOOLEAN,
+    feedback_timestamp TIMESTAMP
+"""
+
+# Initialize empty tracking table
+tracking_df = spark.createDataFrame([], schema=recommendation_log_schema)
+tracking_df.write.mode("overwrite").saveAsTable(
+    f"{FULL_SCHEMA}.ml_action_recommendation_log"
+)
+
+print(f"✅ Created recommendation tracking table: {FULL_SCHEMA}.ml_action_recommendation_log")
+print("   This table will log:")
+print("   - Recommendation requests and parameters")
+print("   - Which recommendations were shown")
+print("   - Which recommendations were selected by users")
+print("   - Feedback on effectiveness")
+print("\n💡 Usage tracking enables future ML improvements:")
+print("   - Identify which recommendations are most useful")
+print("   - Measure adoption rates")
+print("   - A/B test new recommendation strategies")
+print("   - Train collaborative filtering when data accumulates")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Helper Function: Log Recommendations
+
+# COMMAND ----------
+
+def log_recommendation(
+    defect_category: str,
+    root_cause: str,
+    recommendations: list,
+    plant_id: str = None,
+    supplier_tier: str = None,
+    max_cost: float = None,
+    user_selected: bool = False,
+    selected_index: int = None
+):
+    """
+    Log recommendation requests for future analysis and ML improvement.
+    
+    Parameters:
+    -----------
+    defect_category : str
+        Defect category requested
+    root_cause : str
+        Root cause category
+    recommendations : list
+        List of recommendations returned
+    plant_id : str, optional
+        Plant filter used
+    supplier_tier : str, optional
+        Supplier tier filter used
+    max_cost : float, optional
+        Cost filter used
+    user_selected : bool
+        Whether user selected a recommendation
+    selected_index : int, optional
+        Which recommendation was selected (0-indexed)
+    """
+    import uuid
+    from datetime import datetime
+    
+    # Create log entry
+    log_entry = {
+        "recommendation_id": str(uuid.uuid4()),
+        "timestamp": datetime.now(),
+        "defect_category": defect_category,
+        "root_cause_category": root_cause,
+        "plant_id": plant_id,
+        "supplier_tier": supplier_tier,
+        "max_cost": max_cost,
+        "num_recommendations": len(recommendations),
+        "top_recommendation_action": recommendations[0].get("sample_action", "")[:200] if recommendations else None,
+        "top_recommendation_effectiveness": float(recommendations[0].get("effectiveness_rate", "0%").strip('%')) / 100 if recommendations and "effectiveness_rate" in recommendations[0] else None,
+        "match_type": recommendations[0].get("match_type", "unknown") if recommendations else None,
+        "user_selected": user_selected,
+        "selected_recommendation_index": selected_index,
+        "feedback_effective": None,  # To be updated later based on 8D verification
+        "feedback_timestamp": None
+    }
+    
+    # Append to tracking table
+    log_df = spark.createDataFrame([log_entry])
+    log_df.write.mode("append").saveAsTable(
+        f"{FULL_SCHEMA}.ml_action_recommendation_log"
+    )
+    
+    return log_entry["recommendation_id"]
+
+print("✅ Recommendation logging function defined")
+print("   Call log_recommendation() after generating recommendations to track usage")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Demo: Log Sample Recommendations
+
+# COMMAND ----------
+
+# Demo logging
+demo_recs = recommend_corrective_actions_enhanced(
+    defect_category="Dimensional",
+    root_cause="Machine",
+    plant_id="P001",
+    top_n=3
+)
+
+rec_id = log_recommendation(
+    defect_category="Dimensional",
+    root_cause="Machine",
+    recommendations=demo_recs,
+    plant_id="P001",
+    user_selected=True,  # Simulate user selection
+    selected_index=0
+)
+
+print(f"✅ Demo recommendation logged with ID: {rec_id}")
+print(f"\n📊 View logs:")
+print(f"   SELECT * FROM {FULL_SCHEMA}.ml_action_recommendation_log")
 
 # COMMAND ----------
 
@@ -1103,17 +1729,40 @@ for defect_cat, root_cause in test_cases:
 
 # MAGIC %md
 # MAGIC ## Save Anomaly Detection Results
+# MAGIC 
+# MAGIC Save both Isolation Forest and Time Series anomaly results.
 
 # COMMAND ----------
 
+# Combine both anomaly detection methods
+anomaly_combined = comparison_df.copy()
+anomaly_combined['combined_anomaly'] = (
+    (anomaly_combined['ts_anomaly'] == 1) | 
+    (anomaly_combined['iso_forest_anomaly'] == 1)
+).astype(int)
+
+anomaly_combined['anomaly_methods'] = ''
+anomaly_combined.loc[anomaly_combined['ts_anomaly'] == 1, 'anomaly_methods'] = 'time_series'
+anomaly_combined.loc[anomaly_combined['iso_forest_anomaly'] == 1, 'anomaly_methods'] += ',isolation_forest'
+anomaly_combined['anomaly_methods'] = anomaly_combined['anomaly_methods'].str.strip(',')
+
 # Save anomaly detection results
-anomaly_spark = spark.createDataFrame(daily_scrap)
+anomaly_spark = spark.createDataFrame(anomaly_combined)
 anomaly_spark = (
     anomaly_spark
     .withColumn("detection_date", F.current_timestamp())
     .select(
-        "transaction_date", "daily_qty", "daily_cost", "daily_records",
-        "anomaly_score", "is_anomaly", "detection_date"
+        F.col("date").alias("transaction_date"),
+        "daily_qty",
+        "prophet_forecast",
+        "forecast_lower",
+        "forecast_upper",
+        "ts_anomaly",
+        "anomaly_severity",
+        "iso_forest_anomaly",
+        "combined_anomaly",
+        "anomaly_methods",
+        "detection_date"
     )
 )
 
@@ -1121,6 +1770,9 @@ anomaly_spark.write.mode("overwrite").saveAsTable(
     f"{FULL_SCHEMA}.ml_scrap_anomalies"
 )
 print(f"✅ Saved anomaly results: {anomaly_spark.count():,} days")
+print(f"   Time Series Anomalies: {anomaly_spark.filter('ts_anomaly = 1').count():,}")
+print(f"   Isolation Forest Anomalies: {anomaly_spark.filter('iso_forest_anomaly = 1').count():,}")
+print(f"   Combined (Either Method): {anomaly_spark.filter('combined_anomaly = 1').count():,}")
 
 # COMMAND ----------
 
@@ -1173,9 +1825,12 @@ print("=" * 70)
 
 print(f"""
 🚨 ANOMALY DETECTION
-   • Algorithm: Isolation Forest
+   • Algorithm: Isolation Forest + Prophet Time Series
    • Days Analyzed: {len(daily_scrap):,}
-   • Anomalies Detected: {len(anomalies):,} ({len(anomalies)/len(daily_scrap):.1%})
+   • Isolation Forest Anomalies: {len(anomalies):,} ({len(anomalies)/len(daily_scrap):.1%})
+   • Time Series Anomalies: {len(ts_anomalies):,} ({ts_anomaly_rate:.1%})
+   • Combined Anomalies: {anomaly_combined['combined_anomaly'].sum():,}
+   • Forecast MAPE: {mape:.1f}%
    • Output Table: {FULL_SCHEMA}.ml_scrap_anomalies
 
 📊 SUPPLIER RISK SCORING  
@@ -1208,7 +1863,9 @@ print("=" * 70)
 print("""
 1. SET UP ANOMALY ALERTS
    - Create workflow to check ml_scrap_anomalies daily
-   - Alert when is_anomaly = 1
+   - Alert when combined_anomaly = 1
+   - Prioritize by anomaly_severity (time series score)
+   - Use anomaly_methods to understand detection type
 
 2. INTEGRATE SUPPLIER RISK INTO PROCUREMENT
    - Review high-risk suppliers before orders

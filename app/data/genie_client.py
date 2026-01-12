@@ -27,46 +27,17 @@ class GenieResponse:
 
 class GenieClient:
     """Client for Databricks Genie API."""
-
+    
     def __init__(self):
-        from config import app_config
-        import os
-
         self.base_url = f"https://{databricks_config.host}/api/2.0/genie/spaces"
         self.sql_base_url = f"https://{databricks_config.host}/api/2.0/sql/statements"
         self.space_id = genie_config.space_id
-
-        # Get token based on environment
-        token = self._get_token(app_config)
-
         self.headers = {
-            "Authorization": f"Bearer {token}",
+            "Authorization": f"Bearer {databricks_config.token}",
             "Content-Type": "application/json"
         }
         self.conversation_id: Optional[str] = None
         self.debug = False
-
-    def _get_token(self, app_config) -> str:
-        """Get authentication token based on environment."""
-        import os
-
-        if app_config.is_local():
-            # LOCAL: Use personal access token
-            print("[DEBUG] GenieClient: Using LOCAL auth")
-            return databricks_config.token
-        else:
-            # DBX: Get token from SDK Config OAuth M2M
-            print("[DEBUG] GenieClient: Using DBX service principal auth")
-            from databricks.sdk.core import Config
-
-            cfg = Config(host=databricks_config.host)
-            cfg.authenticate()
-            token = cfg.oauth_token().access_token
-
-            if not token:
-                raise ValueError("Failed to get token from service principal authentication")
-
-            return token
     
     def _log(self, message: str):
         """Log debug messages."""

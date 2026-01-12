@@ -695,11 +695,8 @@ def render_supplier_scenario(suppliers_df: pd.DataFrame):
                     textposition='outside'
                 ))
             
-            theme = create_plotly_theme()
             fig.update_layout(
-                paper_bgcolor=theme.get('paper_bgcolor'),
-                plot_bgcolor=theme.get('plot_bgcolor'),
-                font=theme.get('font'),
+                **create_plotly_theme(),
                 height=250,
                 margin=dict(l=0, r=0, t=30, b=0),
                 showlegend=False,
@@ -707,7 +704,7 @@ def render_supplier_scenario(suppliers_df: pd.DataFrame):
                 yaxis_range=[70, 105]
             )
             
-            st.plotly_chart(fig, width='stretch', key="supplier_quality_chart")
+            st.plotly_chart(fig, use_container_width=True, key="supplier_quality_chart")
             
             # Detailed alternatives table
             st.markdown("##### Available Capacity & Details")
@@ -719,7 +716,7 @@ def render_supplier_scenario(suppliers_df: pd.DataFrame):
             alt_display['unit_cost_index'] = alt_display['unit_cost_index'].apply(lambda x: f"{x:.2f}x")
             alt_display.columns = ['Supplier', 'Tier', 'Quality', 'Available Cap.', 'Risk', 'Cost Index']
             
-            st.dataframe(alt_display, width='stretch', hide_index=True)
+            st.dataframe(alt_display, use_container_width=True, hide_index=True)
             
             # Reallocation recommendation
             if spend_action == "Reduce Spend" and len(alternatives) > 0:
@@ -787,17 +784,14 @@ def render_supplier_scenario(suppliers_df: pd.DataFrame):
             hoverinfo='skip'
         ))
         
-        theme = create_plotly_theme()
         fig2.update_layout(
-            paper_bgcolor=theme.get('paper_bgcolor'),
-            plot_bgcolor=theme.get('plot_bgcolor'),
-            font=theme.get('font'),
+            **create_plotly_theme(),
             height=350,
             margin=dict(l=0, r=0, t=20, b=0),
-            legend=dict(orientation='h', y=-0.15, font=dict(color='#4a4a48'))
+            legend=dict(orientation='h', y=-0.15)
         )
         
-        st.plotly_chart(fig2, width='stretch', key="supplier_scatter_chart")
+        st.plotly_chart(fig2, use_container_width=True, key="supplier_scatter_chart")
 
 
 # =============================================================================
@@ -1232,20 +1226,17 @@ def render_plant_scenario(monthly_df: pd.DataFrame, plants: list):
             fillcolor='rgba(16, 185, 129, 0.1)'
         ))
         
-        theme = create_plotly_theme()
         fig.update_layout(
-            paper_bgcolor=theme.get('paper_bgcolor'),
-            plot_bgcolor=theme.get('plot_bgcolor'),
-            font=theme.get('font'),
+            **create_plotly_theme(),
             height=300,
             margin=dict(l=0, r=0, t=40, b=0),
-            legend=dict(orientation='h', y=1.1, font=dict(color='#4a4a48')),
+            legend=dict(orientation='h', y=1.1),
             hovermode='x unified',
             xaxis_title="Month",
             yaxis_title="Monthly Scrap Cost ($)"
         )
         
-        st.plotly_chart(fig, width='stretch', key="plant_trajectory_chart")
+        st.plotly_chart(fig, use_container_width=True, key="plant_trajectory_chart")
         
         roi_pct = ((annual_savings * 5) / investment - 1) * 100 if investment > 0 else 0
         benefit_color = "#10b981" if five_year_savings > 0 else "#ef4444"
@@ -1366,20 +1357,17 @@ def render_work_center_scenario(wc_df: pd.DataFrame, work_centers: list):
             }
         )
         
-        theme = create_plotly_theme()
         fig.update_layout(
-            paper_bgcolor=theme.get('paper_bgcolor'),
-            plot_bgcolor=theme.get('plot_bgcolor'),
-            font=theme.get('font'),
+            **create_plotly_theme(),
             height=350,
             margin=dict(l=0, r=0, t=20, b=0),
             showlegend=True,
-            legend=dict(orientation='h', y=-0.2, font=dict(color='#4a4a48'))
+            legend=dict(orientation='h', y=-0.2)
         )
         
         fig.update_traces(marker=dict(line=dict(width=1, color='white')))
         
-        st.plotly_chart(fig, width='stretch', key="wc_scatter_chart")
+        st.plotly_chart(fig, use_container_width=True, key="wc_scatter_chart")
 
 
 def render_part_scenario(parts_df: pd.DataFrame):
@@ -1524,19 +1512,16 @@ def render_part_scenario(parts_df: pd.DataFrame):
                 marker_color='#10b981'
             ))
             
-            theme = create_plotly_theme()
             fig.update_layout(
-                paper_bgcolor=theme.get('paper_bgcolor'),
-                plot_bgcolor=theme.get('plot_bgcolor'),
-                font=theme.get('font'),
+                **create_plotly_theme(),
                 height=300,
                 margin=dict(l=0, r=0, t=40, b=0),
                 barmode='group',
-                legend=dict(orientation='h', y=1.1, font=dict(color='#4a4a48')),
+                legend=dict(orientation='h', y=1.1),
                 xaxis_tickangle=-45
             )
             
-            st.plotly_chart(fig, width='stretch', key="part_bar_chart")
+            st.plotly_chart(fig, use_container_width=True, key="part_bar_chart")
             
             st.markdown("#### Part Details")
             display_df = selected_data[['part_id', 'part_name', 'monthly_scrap_cost', 
@@ -1546,6 +1531,6 @@ def render_part_scenario(parts_df: pd.DataFrame):
             display_df['unit_cost'] = display_df['unit_cost'].apply(lambda x: f"${x:.2f}")
             display_df.columns = ['Part ID', 'Part Name', 'Monthly Scrap', 'Defect Rate', 'Unit Cost']
             
-            st.dataframe(display_df, width='stretch', hide_index=True)
+            st.dataframe(display_df, use_container_width=True, hide_index=True)
         else:
             st.info("👆 Select one or more parts to analyze")

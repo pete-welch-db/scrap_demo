@@ -32,7 +32,7 @@
 
 # COMMAND ----------
 
-# MAGIC %pip install scikit-learn mlflow[databricks]
+# MAGIC %pip install scikit-learn mlflow[databricks] xgboost lightgbm textblob spacy nltk sentence-transformers
 
 # COMMAND ----------
 
@@ -63,7 +63,7 @@ import json
 
 # Scikit-learn
 from sklearn.model_selection import train_test_split, cross_val_score
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, VotingClassifier
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.metrics import (
     classification_report, confusion_matrix, accuracy_score,
@@ -71,6 +71,23 @@ from sklearn.metrics import (
 )
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+
+# Additional ensemble models
+from xgboost import XGBClassifier
+from lightgbm import LGBMClassifier
+
+# NLP Libraries
+from textblob import TextBlob
+import nltk
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize, sent_tokenize
+from nltk.stem import WordNetLemmatizer
+import re
+from collections import Counter
+
+# Sentence Transformers for semantic embeddings
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity as sklearn_cosine_similarity
 
 # MLflow
 import mlflow
@@ -86,6 +103,273 @@ from pyspark.sql.window import Window
 # Visualization
 import matplotlib.pyplot as plt
 import seaborn as sns
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 🔤 Download NLTK Data
+# MAGIC 
+# MAGIC Download required NLTK resources for text processing.
+
+# COMMAND ----------
+
+# Download NLTK data
+try:
+    nltk.download('punkt', quiet=True)
+    nltk.download('stopwords', quiet=True)
+    nltk.download('wordnet', quiet=True)
+    nltk.download('averaged_perceptron_tagger', quiet=True)
+    print("✅ NLTK data downloaded successfully")
+except Exception as e:
+    print(f"⚠️  NLTK download warning: {e}")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 🔍 NLP Feature Engineering Functions
+# MAGIC 
+# MAGIC Advanced text analysis functions to extract meaningful features from 8D text fields.
+
+# COMMAND ----------
+
+def extract_text_features(text: str) -> dict:
+    """
+    Extract comprehensive NLP features from text.
+    
+    Features extracted:
+    - Word count, sentence count, avg word length
+    - Sentiment (polarity, subjectivity)
+    - Readability scores
+    - Technical term density
+    - Question/exclamation presence
+    - Numerical data presence
+    - Action verb count
+    - Passive voice detection
+    
+    Parameters:
+    -----------
+    text : str
+        Input text to analyze
+        
+    Returns:
+    --------
+    dict
+        Dictionary of NLP features
+    """
+    
+    if not text or pd.isna(text) or str(text).strip() == "":
+        return {
+            'word_count': 0,
+            'sentence_count': 0,
+            'avg_word_length': 0,
+            'sentiment_polarity': 0,
+            'sentiment_subjectivity': 0,
+            'contains_numbers': 0,
+            'contains_questions': 0,
+            'contains_exclamations': 0,
+            'technical_term_ratio': 0,
+            'action_verb_count': 0,
+            'unique_word_ratio': 0,
+            'uppercase_ratio': 0
+        }
+    
+    text = str(text)
+    
+    # Basic metrics
+    words = word_tokenize(text.lower())
+    sentences = sent_tokenize(text)
+    word_count = len(words)
+    sentence_count = len(sentences)
+    
+    # Average word length
+    avg_word_length = np.mean([len(word) for word in words]) if words else 0
+    
+    # Sentiment analysis
+    try:
+        blob = TextBlob(text)
+        sentiment_polarity = blob.sentiment.polarity  # -1 to 1
+        sentiment_subjectivity = blob.sentiment.subjectivity  # 0 to 1
+    except:
+        sentiment_polarity = 0
+        sentiment_subjectivity = 0
+    
+    # Pattern detection
+    contains_numbers = 1 if re.search(r'\d+', text) else 0
+    contains_questions = 1 if '?' in text else 0
+    contains_exclamations = 1 if '!' in text else 0
+    
+    # Technical term density (words > 8 characters)
+    long_words = [w for w in words if len(w) > 8]
+    technical_term_ratio = len(long_words) / word_count if word_count > 0 else 0
+    
+    # Action verbs (common manufacturing/quality terms)
+    action_verbs = [
+        'inspect', 'check', 'verify', 'test', 'measure', 'monitor',
+        'replace', 'adjust', 'calibrate', 'repair', 'fix', 'correct',
+        'implement', 'install', 'remove', 'clean', 'maintain', 'train',
+        'validate', 'review', 'analyze', 'investigate', 'determine'
+    ]
+    action_verb_count = sum(1 for verb in action_verbs if verb in text.lower())
+    
+    # Unique word ratio (vocabulary richness)
+    unique_words = set(words)
+    unique_word_ratio = len(unique_words) / word_count if word_count > 0 else 0
+    
+    # Uppercase ratio (emphasis/urgency indicator)
+    uppercase_chars = sum(1 for c in text if c.isupper())
+    total_chars = len(text)
+    uppercase_ratio = uppercase_chars / total_chars if total_chars > 0 else 0
+    
+    return {
+        'word_count': word_count,
+        'sentence_count': sentence_count,
+        'avg_word_length': round(avg_word_length, 2),
+        'sentiment_polarity': round(sentiment_polarity, 3),
+        'sentiment_subjectivity': round(sentiment_subjectivity, 3),
+        'contains_numbers': contains_numbers,
+        'contains_questions': contains_questions,
+        'contains_exclamations': contains_exclamations,
+        'technical_term_ratio': round(technical_term_ratio, 3),
+        'action_verb_count': action_verb_count,
+        'unique_word_ratio': round(unique_word_ratio, 3),
+        'uppercase_ratio': round(uppercase_ratio, 3)
+    }
+
+
+def extract_key_phrases(text: str, top_n: int = 5) -> list:
+    """
+    Extract key phrases (bigrams/trigrams) from text.
+    
+    Parameters:
+    -----------
+    text : str
+        Input text
+    top_n : int
+        Number of top phrases to return
+        
+    Returns:
+    --------
+    list
+        Top N key phrases
+    """
+    
+    if not text or pd.isna(text):
+        return []
+    
+    text = str(text).lower()
+    
+    # Tokenize
+    words = word_tokenize(text)
+    
+    # Remove stopwords
+    try:
+        stop_words = set(stopwords.words('english'))
+    except:
+        stop_words = set()
+    
+    words = [w for w in words if w.isalnum() and w not in stop_words]
+    
+    # Generate bigrams
+    bigrams = [f"{words[i]} {words[i+1]}" for i in range(len(words)-1)]
+    
+    # Count and return top phrases
+    phrase_counts = Counter(bigrams)
+    top_phrases = [phrase for phrase, _ in phrase_counts.most_common(top_n)]
+    
+    return top_phrases
+
+
+def calculate_text_similarity(text1: str, text2: str, use_bert: bool = True) -> float:
+    """
+    Calculate cosine similarity between two texts.
+    
+    Parameters:
+    -----------
+    text1 : str
+        First text
+    text2 : str
+        Second text
+    use_bert : bool
+        If True, use BERT embeddings. If False, fall back to TF-IDF.
+        
+    Returns:
+    --------
+    float
+        Similarity score (0-1)
+    """
+    
+    if not text1 or not text2 or pd.isna(text1) or pd.isna(text2):
+        return 0.0
+    
+    try:
+        if use_bert:
+            # Use sentence-transformers for semantic similarity
+            # This model is optimized for semantic similarity tasks
+            model = SentenceTransformer('all-MiniLM-L6-v2')
+            
+            # Generate embeddings
+            embeddings = model.encode([str(text1), str(text2)])
+            
+            # Calculate cosine similarity
+            similarity = sklearn_cosine_similarity([embeddings[0]], [embeddings[1]])[0][0]
+            return float(similarity)
+        else:
+            # Fallback to TF-IDF
+            vectorizer = TfidfVectorizer()
+            tfidf_matrix = vectorizer.fit_transform([str(text1), str(text2)])
+            similarity = cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:2])[0][0]
+            return float(similarity)
+    except Exception as e:
+        print(f"   ⚠️ Similarity calculation failed: {e}, returning 0.0")
+        return 0.0
+
+
+def extract_root_cause_keywords(text: str) -> dict:
+    """
+    Extract manufacturing/quality-specific keywords from root cause text.
+    
+    Parameters:
+    -----------
+    text : str
+        Root cause analysis text
+        
+    Returns:
+    --------
+    dict
+        Presence indicators for keyword categories
+    """
+    
+    if not text or pd.isna(text):
+        return {
+            'mentions_equipment': 0,
+            'mentions_material': 0,
+            'mentions_process': 0,
+            'mentions_human': 0,
+            'mentions_measurement': 0,
+            'mentions_environment': 0
+        }
+    
+    text = str(text).lower()
+    
+    # 6M categories (Ishikawa/Fishbone)
+    equipment_terms = ['machine', 'equipment', 'tool', 'die', 'fixture', 'robot', 'press']
+    material_terms = ['material', 'steel', 'plastic', 'supplier', 'batch', 'lot', 'raw']
+    process_terms = ['process', 'procedure', 'method', 'setup', 'cycle', 'operation', 'sequence']
+    human_terms = ['operator', 'training', 'skill', 'error', 'mistake', 'fatigue', 'experience']
+    measurement_terms = ['measurement', 'gauge', 'calibration', 'tolerance', 'specification', 'dimension']
+    environment_terms = ['temperature', 'humidity', 'contamination', 'cleanliness', 'environment']
+    
+    return {
+        'mentions_equipment': 1 if any(term in text for term in equipment_terms) else 0,
+        'mentions_material': 1 if any(term in text for term in material_terms) else 0,
+        'mentions_process': 1 if any(term in text for term in process_terms) else 0,
+        'mentions_human': 1 if any(term in text for term in human_terms) else 0,
+        'mentions_measurement': 1 if any(term in text for term in measurement_terms) else 0,
+        'mentions_environment': 1 if any(term in text for term in environment_terms) else 0
+    }
+
+
+print("✅ NLP feature engineering functions defined")
 
 # COMMAND ----------
 
@@ -285,8 +569,9 @@ print(f"   Target: {TARGET_COLUMN}")
 
 # COMMAND ----------
 
-# Prepare training data
+# Prepare training data - Include transaction_date for temporal splitting
 training_df = scrap_df.select(
+    "transaction_date",  # Add date for temporal split
     *NUMERIC_FEATURES,
     *CATEGORICAL_FEATURES,
     TARGET_COLUMN
@@ -295,9 +580,13 @@ training_df = scrap_df.select(
 # Convert to Pandas
 train_pd = training_df.toPandas()
 
+# Convert transaction_date to datetime
+train_pd["transaction_date"] = pd.to_datetime(train_pd["transaction_date"])
+
 print(f"📊 Training Data:")
 print(f"   Samples: {len(train_pd):,}")
 print(f"   Features: {len(NUMERIC_FEATURES) + len(CATEGORICAL_FEATURES)}")
+print(f"   Date Range: {train_pd['transaction_date'].min()} to {train_pd['transaction_date'].max()}")
 
 print(f"\n📈 Target Distribution:")
 print(train_pd[TARGET_COLUMN].value_counts())
@@ -349,24 +638,77 @@ print(f"📊 Target Vector Shape: {y.shape}")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Train/Test Split
+# MAGIC ## Temporal Train/Test Split
 # MAGIC 
-# MAGIC Split data into training (80%) and test (20%) sets with stratification
-# MAGIC to maintain class distribution.
+# MAGIC **Avoid Data Leakage**: Train on older data, test on more recent data.
+# MAGIC 
+# MAGIC This simulates real-world deployment where we predict future root causes
+# MAGIC based on historical patterns. Using random splitting would leak future
+# MAGIC information into training data, inflating performance metrics.
+# MAGIC 
+# MAGIC **Strategy**: Use 80% oldest data for training, 20% newest for testing.
 
 # COMMAND ----------
 
-# Train/test split with stratification
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, 
-    test_size=0.2, 
-    random_state=42, 
-    stratify=y  # Maintain class distribution
-)
+# Sort by date and perform temporal split
+train_pd_sorted = train_pd.sort_values('transaction_date').reset_index(drop=True)
 
-print(f"📊 Data Split:")
-print(f"   Training: {len(X_train):,} samples ({len(X_train)/len(X):.0%})")
-print(f"   Testing: {len(X_test):,} samples ({len(X_test)/len(X):.0%})")
+# Calculate split point (80% for training)
+split_idx = int(len(train_pd_sorted) * 0.8)
+split_date = train_pd_sorted.loc[split_idx, 'transaction_date']
+
+# Split into train and test based on date
+train_mask = train_pd_sorted['transaction_date'] < split_date
+test_mask = train_pd_sorted['transaction_date'] >= split_date
+
+train_set = train_pd_sorted[train_mask]
+test_set = train_pd_sorted[test_mask]
+
+# Prepare X and y for training set
+X_train = train_set[encoded_feature_cols].values
+y_train = train_set["target_encoded"].values
+
+# Prepare X and y for test set
+X_test = test_set[encoded_feature_cols].values
+y_test = test_set["target_encoded"].values
+
+print(f"📊 Temporal Data Split (Avoiding Data Leakage):")
+print(f"{'='*70}")
+print(f"\n📅 Training Set:")
+print(f"   Date Range: {train_set['transaction_date'].min().date()} to {train_set['transaction_date'].max().date()}")
+print(f"   Samples: {len(X_train):,} ({len(X_train)/len(train_pd_sorted):.0%})")
+print(f"   Shape: {X_train.shape}")
+
+print(f"\n📅 Test Set:")
+print(f"   Date Range: {test_set['transaction_date'].min().date()} to {test_set['transaction_date'].max().date()}")
+print(f"   Samples: {len(X_test):,} ({len(X_test)/len(train_pd_sorted):.0%})")
+print(f"   Shape: {X_test.shape}")
+
+print(f"\n🔒 Data Leakage Prevention:")
+print(f"   ✅ Training only on historical data (before {split_date.date()})")
+print(f"   ✅ Testing on future data (from {split_date.date()} onward)")
+print(f"   ✅ No overlap between train and test dates")
+
+# Check class distribution in both sets
+print(f"\n📊 Class Distribution Check:")
+train_dist = pd.Series(y_train).value_counts(normalize=True).sort_index()
+test_dist = pd.Series(y_test).value_counts(normalize=True).sort_index()
+
+comparison_df = pd.DataFrame({
+    'Train %': train_dist * 100,
+    'Test %': test_dist * 100
+})
+comparison_df['Difference'] = comparison_df['Test %'] - comparison_df['Train %']
+
+print(comparison_df.round(1).to_string())
+
+# Warn if distributions are very different
+max_diff = comparison_df['Difference'].abs().max()
+if max_diff > 10:
+    print(f"\n⚠️  WARNING: Class distribution shift detected (max diff: {max_diff:.1f}%)")
+    print(f"   This may indicate concept drift over time.")
+else:
+    print(f"\n✅ Class distributions are reasonably similar (max diff: {max_diff:.1f}%)")
 
 # COMMAND ----------
 
@@ -388,12 +730,14 @@ mlflow.sklearn.autolog(disable=True)
 with mlflow.start_run(run_name="root_cause_random_forest") as run:
     
     # ===== LOG DATASET INFO =====
-    mlflow.log_param("dataset_size", len(train_pd))
+    mlflow.log_param("dataset_size", len(train_pd_sorted))
     mlflow.log_param("train_size", len(X_train))
     mlflow.log_param("test_size", len(X_test))
     mlflow.log_param("num_features", len(encoded_feature_cols))
     mlflow.log_param("num_classes", len(target_encoder.classes_))
     mlflow.log_param("feature_list", json.dumps(encoded_feature_cols))
+    mlflow.log_param("split_method", "temporal")
+    mlflow.log_param("split_date", str(split_date.date()))
     
     # ===== DEFINE MODEL =====
     rf_model = RandomForestClassifier(
@@ -497,7 +841,7 @@ with mlflow.start_run(run_name="root_cause_random_forest") as run:
     
     # ===== PRINT RESULTS =====
     print(f"\n{'='*60}")
-    print(f"✅ Model: Root Cause Random Forest Classifier")
+    print(f"✅ Model: Root Cause Random Forest Classifier (Baseline)")
     print(f"{'='*60}")
     print(f"\n📊 Test Metrics:")
     print(f"   Accuracy:  {accuracy:.4f}")
@@ -506,6 +850,11 @@ with mlflow.start_run(run_name="root_cause_random_forest") as run:
     print(f"   F1 Score:  {f1:.4f}")
     print(f"\n📊 Cross-Validation: {cv_scores.mean():.4f} (+/- {cv_scores.std()*2:.4f})")
     print(f"\n🔗 MLflow Run ID: {run.info.run_id}")
+    
+    # Store baseline model for comparison
+    baseline_rf_model = rf_model
+    baseline_accuracy = accuracy
+    baseline_f1 = f1
 
 # COMMAND ----------
 
@@ -548,6 +897,332 @@ plt.show()
 
 # MAGIC %md
 # MAGIC ---
+# MAGIC # 🎯 Ensemble Model: Voting Classifier
+# MAGIC ---
+# MAGIC 
+# MAGIC ## Objective
+# MAGIC Combine multiple models (Random Forest, Gradient Boosting, XGBoost, LightGBM) 
+# MAGIC using soft voting to improve prediction accuracy and robustness.
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Train Voting Classifier Ensemble
+# MAGIC 
+# MAGIC Combines predictions from 4 different classifiers:
+# MAGIC - **Random Forest**: Robust, handles non-linearity
+# MAGIC - **Gradient Boosting**: Sequential error correction
+# MAGIC - **XGBoost**: Fast, regularized boosting
+# MAGIC - **LightGBM**: Efficient, handles categorical features well
+
+# COMMAND ----------
+
+# Disable autolog temporarily for custom logging
+mlflow.sklearn.autolog(disable=True)
+
+print("\n🔍 Verifying Feature Consistency for Ensemble...")
+print(f"   Feature columns: {len(encoded_feature_cols)}")
+print(f"   Training shape: {X_train.shape}")
+print(f"   Testing shape: {X_test.shape}")
+print(f"   Class balance: {dict(zip(*np.unique(y_train, return_counts=True)))}")
+
+with mlflow.start_run(run_name="root_cause_voting_ensemble") as run:
+    
+    # ===== LOG DATASET INFO =====
+    mlflow.log_param("dataset_size", len(train_pd_sorted))
+    mlflow.log_param("train_size", len(X_train))
+    mlflow.log_param("test_size", len(X_test))
+    mlflow.log_param("num_features", len(encoded_feature_cols))
+    mlflow.log_param("num_classes", len(target_encoder.classes_))
+    mlflow.log_param("split_method", "temporal")
+    mlflow.log_param("split_date", str(split_date.date()))
+    
+    # ===== DEFINE BASE MODELS =====
+    print("🔄 Initializing ensemble models...")
+    
+    # Model 1: Random Forest
+    rf_ensemble = RandomForestClassifier(
+        n_estimators=100,
+        max_depth=15,
+        min_samples_split=10,
+        min_samples_leaf=5,
+        random_state=42,
+        n_jobs=-1,
+        class_weight='balanced'
+    )
+    
+    # Model 2: Gradient Boosting
+    gb_ensemble = GradientBoostingClassifier(
+        n_estimators=100,
+        max_depth=10,
+        learning_rate=0.1,
+        min_samples_split=10,
+        min_samples_leaf=5,
+        random_state=42
+    )
+    
+    # Model 3: XGBoost
+    xgb_ensemble = XGBClassifier(
+        n_estimators=100,
+        max_depth=10,
+        learning_rate=0.1,
+        random_state=42,
+        n_jobs=-1,
+        eval_metric='mlogloss'
+    )
+    
+    # Model 4: LightGBM
+    lgbm_ensemble = LGBMClassifier(
+        n_estimators=100,
+        max_depth=10,
+        learning_rate=0.1,
+        random_state=42,
+        n_jobs=-1,
+        verbose=-1
+    )
+    
+    # ===== CREATE VOTING CLASSIFIER =====
+    print("🔄 Creating Voting Classifier with soft voting...")
+    
+    voting_clf = VotingClassifier(
+        estimators=[
+            ('rf', rf_ensemble),
+            ('gb', gb_ensemble),
+            ('xgb', xgb_ensemble),
+            ('lgbm', lgbm_ensemble)
+        ],
+        voting='soft',  # Use probability-based voting
+        n_jobs=-1
+    )
+    
+    # Log ensemble configuration
+    mlflow.log_param("model_type", "VotingClassifier")
+    mlflow.log_param("voting_method", "soft")
+    mlflow.log_param("num_base_models", 4)
+    mlflow.log_param("base_models", "RandomForest, GradientBoosting, XGBoost, LightGBM")
+    
+    # ===== TRAIN ENSEMBLE =====
+    print("🔄 Training ensemble (this may take a few minutes)...")
+    voting_clf.fit(X_train, y_train)
+    print("✅ Ensemble training complete")
+    
+    # ===== PREDICTIONS =====
+    print("🔄 Generating predictions...")
+    y_pred_ensemble = voting_clf.predict(X_test)
+    y_pred_proba_ensemble = voting_clf.predict_proba(X_test)
+    
+    # ===== CALCULATE METRICS =====
+    accuracy_ensemble = accuracy_score(y_test, y_pred_ensemble)
+    precision_ensemble = precision_score(y_test, y_pred_ensemble, average='weighted')
+    recall_ensemble = recall_score(y_test, y_pred_ensemble, average='weighted')
+    f1_ensemble = f1_score(y_test, y_pred_ensemble, average='weighted')
+    
+    # Cross-validation score for ensemble
+    print("🔄 Running cross-validation on ensemble...")
+    cv_scores_ensemble = cross_val_score(voting_clf, X_train, y_train, cv=5, n_jobs=-1)
+    
+    # ===== LOG METRICS =====
+    mlflow.log_metric("accuracy", accuracy_ensemble)
+    mlflow.log_metric("precision_weighted", precision_ensemble)
+    mlflow.log_metric("recall_weighted", recall_ensemble)
+    mlflow.log_metric("f1_weighted", f1_ensemble)
+    mlflow.log_metric("cv_mean", cv_scores_ensemble.mean())
+    mlflow.log_metric("cv_std", cv_scores_ensemble.std())
+    
+    # Calculate improvement over single Random Forest
+    improvement = ((accuracy_ensemble - accuracy) / accuracy) * 100
+    mlflow.log_metric("improvement_over_rf_pct", improvement)
+    
+    # ===== INDIVIDUAL MODEL PERFORMANCE =====
+    print("\n📊 Evaluating individual models within ensemble...")
+    
+    individual_results = []
+    for name, model in voting_clf.named_estimators_.items():
+        y_pred_individual = model.predict(X_test)
+        acc_individual = accuracy_score(y_test, y_pred_individual)
+        f1_individual = f1_score(y_test, y_pred_individual, average='weighted')
+        
+        individual_results.append({
+            'model': name,
+            'accuracy': acc_individual,
+            'f1_score': f1_individual
+        })
+        
+        mlflow.log_metric(f"{name}_accuracy", acc_individual)
+        mlflow.log_metric(f"{name}_f1", f1_individual)
+    
+    individual_df = pd.DataFrame(individual_results)
+    
+    # ===== CONFUSION MATRIX =====
+    cm_ensemble = confusion_matrix(y_test, y_pred_ensemble)
+    fig, ax = plt.subplots(figsize=(10, 8))
+    sns.heatmap(
+        cm_ensemble, 
+        annot=True, 
+        fmt="d", 
+        cmap="Blues",
+        xticklabels=target_encoder.classes_,
+        yticklabels=target_encoder.classes_,
+        ax=ax
+    )
+    ax.set_title("Voting Ensemble - Confusion Matrix", fontsize=14)
+    ax.set_xlabel("Predicted", fontsize=12)
+    ax.set_ylabel("Actual", fontsize=12)
+    plt.tight_layout()
+    mlflow.log_figure(fig, "ensemble_confusion_matrix.png")
+    plt.close()
+    
+    # ===== INDIVIDUAL MODEL COMPARISON PLOT =====
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    # Add individual models
+    individual_df_sorted = individual_df.sort_values('accuracy', ascending=True)
+    ax.barh(individual_df_sorted['model'], individual_df_sorted['accuracy'], 
+            alpha=0.7, label='Individual Models')
+    
+    # Add ensemble result
+    ax.barh('Ensemble', accuracy_ensemble, color='green', alpha=0.9, label='Ensemble')
+    
+    ax.set_xlabel('Accuracy', fontsize=12)
+    ax.set_title('Model Performance Comparison', fontsize=14)
+    ax.legend()
+    ax.grid(True, alpha=0.3, axis='x')
+    plt.tight_layout()
+    mlflow.log_figure(fig, "model_comparison.png")
+    plt.close()
+    
+    # ===== CLASSIFICATION REPORT =====
+    report_ensemble = classification_report(
+        y_test, y_pred_ensemble, 
+        target_names=target_encoder.classes_,
+        output_dict=True
+    )
+    with open("/tmp/ensemble_classification_report.json", "w") as f:
+        json.dump(report_ensemble, f, indent=2)
+    mlflow.log_artifact("/tmp/ensemble_classification_report.json")
+    
+    # ===== LOG MODEL =====
+    signature = infer_signature(X_train, y_pred_ensemble)
+    mlflow.sklearn.log_model(
+        voting_clf, 
+        "model",
+        signature=signature
+    )
+    
+    # ===== PRINT RESULTS =====
+    print(f"\n{'='*70}")
+    print(f"✅ Model: Voting Classifier Ensemble")
+    print(f"{'='*70}")
+    print(f"\n📊 Ensemble Test Metrics:")
+    print(f"   Accuracy:  {accuracy_ensemble:.4f}")
+    print(f"   Precision: {precision_ensemble:.4f}")
+    print(f"   Recall:    {recall_ensemble:.4f}")
+    print(f"   F1 Score:  {f1_ensemble:.4f}")
+    print(f"\n📊 Cross-Validation: {cv_scores_ensemble.mean():.4f} (+/- {cv_scores_ensemble.std()*2:.4f})")
+    
+    print(f"\n📈 Improvement over Single Random Forest:")
+    print(f"   Accuracy: {accuracy:.4f} → {accuracy_ensemble:.4f} ({improvement:+.2f}%)")
+    
+    print(f"\n📊 Individual Model Performance:")
+    for _, row in individual_df.iterrows():
+        print(f"   {row['model']}: {row['accuracy']:.4f}")
+    
+    print(f"\n🔗 MLflow Run ID: {run.info.run_id}")
+    
+    # Store ensemble model for later use
+    ensemble_model = voting_clf
+    
+    # ===== ENSEMBLE VERIFICATION =====
+    print(f"\n{'='*70}")
+    print(f"🔍 Ensemble Model Verification")
+    print(f"{'='*70}")
+    print(f"\n✅ Base Models Trained:")
+    for name, model in voting_clf.named_estimators_.items():
+        print(f"   • {name}: {type(model).__name__}")
+    
+    print(f"\n✅ Voting Configuration:")
+    print(f"   • Strategy: {voting_clf.voting}")
+    print(f"   • Weights: {voting_clf.weights}")
+    print(f"   • Parallel: {voting_clf.n_jobs}")
+    
+    print(f"\n✅ Data Integrity:")
+    print(f"   • Features used: {len(encoded_feature_cols)}")
+    print(f"   • Training samples: {len(X_train):,}")
+    print(f"   • Test samples: {len(X_test):,}")
+    print(f"   • Classes predicted: {len(np.unique(y_pred_ensemble))}")
+    
+    # Verify all classes are represented
+    missing_classes = set(target_encoder.classes_) - set(target_encoder.inverse_transform(np.unique(y_pred_ensemble)))
+    if missing_classes:
+        print(f"\n⚠️  WARNING: Some classes never predicted: {missing_classes}")
+    else:
+        print(f"\n✅ All {len(target_encoder.classes_)} classes represented in predictions")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Ensemble Classification Report
+
+# COMMAND ----------
+
+# Print ensemble classification report
+print("\n📊 Ensemble Classification Report by Root Cause Category:")
+print("=" * 70)
+print(classification_report(y_test, y_pred_ensemble, target_names=target_encoder.classes_))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Visualize Model Comparison
+
+# COMMAND ----------
+
+# Compare all models visually
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
+
+# Left: Accuracy comparison
+models_comparison = pd.DataFrame([
+    {'Model': 'Random Forest', 'Accuracy': accuracy, 'F1': f1},
+    {'Model': 'Ensemble (Voting)', 'Accuracy': accuracy_ensemble, 'F1': f1_ensemble}
+])
+
+x = range(len(models_comparison))
+width = 0.35
+ax1.bar([i - width/2 for i in x], models_comparison['Accuracy'], 
+        width, label='Accuracy', alpha=0.8)
+ax1.bar([i + width/2 for i in x], models_comparison['F1'], 
+        width, label='F1 Score', alpha=0.8)
+ax1.set_xlabel('Model', fontsize=12)
+ax1.set_ylabel('Score', fontsize=12)
+ax1.set_title('Ensemble vs Single Model Performance', fontsize=14)
+ax1.set_xticks(x)
+ax1.set_xticklabels(models_comparison['Model'])
+ax1.legend()
+ax1.grid(True, alpha=0.3, axis='y')
+
+# Right: Individual ensemble models
+ax2.barh(individual_df['model'], individual_df['accuracy'], alpha=0.7, color='steelblue')
+ax2.axvline(x=accuracy_ensemble, color='red', linestyle='--', linewidth=2, 
+            label=f'Ensemble: {accuracy_ensemble:.4f}')
+ax2.set_xlabel('Accuracy', fontsize=12)
+ax2.set_title('Individual Models in Ensemble', fontsize=14)
+ax2.legend()
+ax2.grid(True, alpha=0.3, axis='x')
+
+plt.tight_layout()
+plt.show()
+
+print("\n💡 Key Insights:")
+print(f"   • Ensemble accuracy: {accuracy_ensemble:.1%}")
+print(f"   • Best individual model: {individual_df.loc[individual_df['accuracy'].idxmax(), 'model']} "
+      f"({individual_df['accuracy'].max():.1%})")
+print(f"   • Ensemble improvement: {improvement:+.2f}%")
+print(f"   • Voting combines strengths of all models for more robust predictions")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ---
 # MAGIC # 🔎 Validate Quality Department Assignments
 # MAGIC ---
 # MAGIC 
@@ -558,30 +1233,50 @@ plt.show()
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Predict Root Cause for All Records
+# MAGIC ## Predict Root Cause for All Records (Using Ensemble)
 # MAGIC 
-# MAGIC Apply the trained model to all records and compare with assigned root causes.
+# MAGIC Apply the ensemble model to all records for better validation quality.
+# MAGIC First, calculate baseline RF agreement for comparison.
 
 # COMMAND ----------
 
-# Predict root cause for all records
-X_all = train_pd[encoded_feature_cols].values
-y_pred_all = rf_model.predict(X_all)
-y_proba_all = rf_model.predict_proba(X_all)
+# Calculate baseline RF agreement rate for comparison
+X_all = train_pd_sorted[encoded_feature_cols].values
+y_pred_all_rf = baseline_rf_model.predict(X_all)
+y_proba_all_rf = baseline_rf_model.predict_proba(X_all)
+
+train_pd_temp = train_pd_sorted.copy()
+train_pd_temp["predicted_root_cause_rf"] = target_encoder.inverse_transform(y_pred_all_rf)
+train_pd_temp["prediction_matches_rf"] = train_pd_temp["predicted_root_cause_rf"] == train_pd_temp[TARGET_COLUMN]
+agreement_rate_rf = train_pd_temp["prediction_matches_rf"].mean()
+
+print(f"📊 Baseline Random Forest Agreement: {agreement_rate_rf:.1%}")
+
+# COMMAND ----------
+
+# Predict root cause for all records using ENSEMBLE model
+y_pred_all = ensemble_model.predict(X_all)
+y_proba_all = ensemble_model.predict_proba(X_all)
 
 # Add predictions to dataframe
-train_pd["predicted_root_cause"] = target_encoder.inverse_transform(y_pred_all)
-train_pd["prediction_confidence"] = y_proba_all.max(axis=1)
-train_pd["prediction_matches"] = train_pd["predicted_root_cause"] == train_pd[TARGET_COLUMN]
+train_pd_sorted["predicted_root_cause"] = target_encoder.inverse_transform(y_pred_all)
+train_pd_sorted["prediction_confidence"] = y_proba_all.max(axis=1)
+train_pd_sorted["prediction_matches"] = train_pd_sorted["predicted_root_cause"] == train_pd_sorted[TARGET_COLUMN]
 
 # Calculate agreement rate
-agreement_rate = train_pd["prediction_matches"].mean()
+agreement_rate_ensemble = train_pd_sorted["prediction_matches"].mean()
 
-print(f"📊 Model-Quality Agreement Analysis:")
-print(f"{'='*60}")
-print(f"   Total Records Analyzed: {len(train_pd):,}")
-print(f"   Model Agrees with Quality: {train_pd['prediction_matches'].sum():,} ({agreement_rate:.1%})")
-print(f"   Model Disagrees: {(~train_pd['prediction_matches']).sum():,} ({1-agreement_rate:.1%})")
+print(f"📊 Ensemble Model-Quality Agreement Analysis:")
+print(f"{'='*70}")
+print(f"   Total Records Analyzed: {len(train_pd_sorted):,}")
+print(f"   Model Agrees with Quality: {train_pd_sorted['prediction_matches'].sum():,} ({agreement_rate_ensemble:.1%})")
+print(f"   Model Disagrees: {(~train_pd_sorted['prediction_matches']).sum():,} ({1-agreement_rate_ensemble:.1%})")
+print(f"\n📈 Improvement over Single RF:")
+print(f"   RF Agreement: {agreement_rate_rf:.1%}")
+print(f"   Ensemble Agreement: {agreement_rate_ensemble:.1%}")
+print(f"   Improvement: {((agreement_rate_ensemble - agreement_rate_rf) / agreement_rate_rf * 100):+.2f}%")
+print(f"   Ensemble Agreement: {agreement_rate_ensemble:.1%}")
+print(f"   Change: {(agreement_rate_ensemble - agreement_rate) * 100:+.2f} percentage points")
 
 # COMMAND ----------
 
@@ -593,7 +1288,7 @@ print(f"   Model Disagrees: {(~train_pd['prediction_matches']).sum():,} ({1-agre
 # COMMAND ----------
 
 # Find disagreements
-disagreements = train_pd[~train_pd["prediction_matches"]].copy()
+disagreements = train_pd_sorted[~train_pd_sorted["prediction_matches"]].copy()
 
 print(f"\n📊 Disagreement Analysis:")
 print(f"{'='*60}")
@@ -623,9 +1318,9 @@ print(disagreement_patterns.head(15).to_string(index=False))
 # High confidence disagreements
 HIGH_CONFIDENCE_THRESHOLD = 0.70
 
-high_conf_disagreements = train_pd[
-    (~train_pd["prediction_matches"]) & 
-    (train_pd["prediction_confidence"] > HIGH_CONFIDENCE_THRESHOLD)
+high_conf_disagreements = train_pd_sorted[
+    (~train_pd_sorted["prediction_matches"]) & 
+    (train_pd_sorted["prediction_confidence"] > HIGH_CONFIDENCE_THRESHOLD)
 ]
 
 print(f"📊 High-Confidence Disagreements (>{HIGH_CONFIDENCE_THRESHOLD:.0%} model confidence):")
@@ -662,7 +1357,7 @@ print(high_conf_by_defect.to_string())
 # COMMAND ----------
 
 # Prepare validation results for saving
-validation_results = train_pd[[
+validation_results = train_pd_sorted[[
     "defect_category", "work_center_type_lookup", "plant_id",
     TARGET_COLUMN, "predicted_root_cause", 
     "prediction_matches", "prediction_confidence",
@@ -717,11 +1412,159 @@ closed_8d = eight_d_pd[
     (eight_d_pd["verification_result"].notna())
 ].copy()
 
+# Convert dates to datetime for temporal splitting
+closed_8d["created_date"] = pd.to_datetime(closed_8d["created_date"])
+closed_8d["closed_date"] = pd.to_datetime(closed_8d["closed_date"])
+
 print(f"📊 8D Training Data:")
 print(f"   Closed 8Ds with verification: {len(closed_8d):,}")
+print(f"   Date Range: {closed_8d['created_date'].min().date()} to {closed_8d['created_date'].max().date()}")
 
 print(f"\n📈 Verification Results:")
 print(closed_8d["verification_result"].value_counts())
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 🔤 Extract NLP Features from 8D Text
+# MAGIC 
+# MAGIC Apply advanced NLP feature extraction to improve model performance.
+
+# COMMAND ----------
+
+print("🔄 Extracting NLP features from 8D text fields...")
+
+# Extract features from problem description
+print("   Analyzing problem descriptions...")
+problem_features = closed_8d['problem_description'].apply(extract_text_features).apply(pd.Series)
+problem_features.columns = [f'problem_{col}' for col in problem_features.columns]
+
+# Extract features from root cause analysis
+print("   Analyzing root cause text...")
+root_cause_features = closed_8d['root_cause_analysis'].apply(extract_text_features).apply(pd.Series)
+root_cause_features.columns = [f'root_cause_{col}' for col in root_cause_features.columns]
+
+# Extract features from corrective actions
+print("   Analyzing corrective actions...")
+corrective_features = closed_8d['corrective_actions'].apply(extract_text_features).apply(pd.Series)
+corrective_features.columns = [f'corrective_{col}' for col in corrective_features.columns]
+
+# Extract root cause keywords (6M categories)
+print("   Extracting root cause keywords (6M analysis)...")
+root_cause_keywords = closed_8d['root_cause_analysis'].apply(extract_root_cause_keywords).apply(pd.Series)
+
+# Calculate text similarity between problem and solution
+print("   Calculating text coherence scores...")
+closed_8d['problem_solution_similarity'] = closed_8d.apply(
+    lambda row: calculate_text_similarity(
+        row['problem_description'], 
+        row['corrective_actions']
+    ), axis=1
+)
+
+# Combine all NLP features
+nlp_features = pd.concat([
+    problem_features,
+    root_cause_features,
+    corrective_features,
+    root_cause_keywords,
+    closed_8d[['problem_solution_similarity']]
+], axis=1)
+
+print(f"\n✅ NLP Feature Extraction Complete")
+print(f"   Total NLP Features Created: {nlp_features.shape[1]}")
+print(f"\n📊 Sample NLP Features:")
+print(nlp_features.head())
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Visualize NLP Features
+
+# COMMAND ----------
+
+# Visualize key NLP features by effectiveness
+fig, axes = plt.subplots(2, 3, figsize=(16, 10))
+
+# Add is_effective to nlp_features for plotting
+nlp_viz = nlp_features.copy()
+nlp_viz['is_effective'] = (closed_8d['verification_result'] == 'Effective').astype(int)
+
+# Plot 1: Root cause word count by effectiveness
+axes[0, 0].boxplot([
+    nlp_viz[nlp_viz['is_effective'] == 1]['root_cause_word_count'],
+    nlp_viz[nlp_viz['is_effective'] == 0]['root_cause_word_count']
+])
+axes[0, 0].set_xticklabels(['Effective', 'Not Effective'])
+axes[0, 0].set_title('Root Cause Text Length')
+axes[0, 0].set_ylabel('Word Count')
+axes[0, 0].grid(True, alpha=0.3)
+
+# Plot 2: Action verb count
+axes[0, 1].boxplot([
+    nlp_viz[nlp_viz['is_effective'] == 1]['corrective_action_verb_count'],
+    nlp_viz[nlp_viz['is_effective'] == 0]['corrective_action_verb_count']
+])
+axes[0, 1].set_xticklabels(['Effective', 'Not Effective'])
+axes[0, 1].set_title('Action Verbs in Corrective Actions')
+axes[0, 1].set_ylabel('Action Verb Count')
+axes[0, 1].grid(True, alpha=0.3)
+
+# Plot 3: Root cause sentiment
+axes[0, 2].boxplot([
+    nlp_viz[nlp_viz['is_effective'] == 1]['root_cause_sentiment_polarity'],
+    nlp_viz[nlp_viz['is_effective'] == 0]['root_cause_sentiment_polarity']
+])
+axes[0, 2].set_xticklabels(['Effective', 'Not Effective'])
+axes[0, 2].set_title('Root Cause Text Sentiment')
+axes[0, 2].set_ylabel('Sentiment Polarity')
+axes[0, 2].grid(True, alpha=0.3)
+
+# Plot 4: 6M Category mentions
+m6_features = ['mentions_equipment', 'mentions_material', 'mentions_process', 
+               'mentions_human', 'mentions_measurement', 'mentions_environment']
+m6_effective = nlp_viz[nlp_viz['is_effective'] == 1][m6_features].mean()
+m6_not_effective = nlp_viz[nlp_viz['is_effective'] == 0][m6_features].mean()
+
+x = range(len(m6_features))
+width = 0.35
+axes[1, 0].bar([i - width/2 for i in x], m6_effective, width, label='Effective', alpha=0.8)
+axes[1, 0].bar([i + width/2 for i in x], m6_not_effective, width, label='Not Effective', alpha=0.8)
+axes[1, 0].set_xticks(x)
+axes[1, 0].set_xticklabels([m.replace('mentions_', '') for m in m6_features], rotation=45, ha='right')
+axes[1, 0].set_title('6M Root Cause Categories')
+axes[1, 0].set_ylabel('Mention Rate')
+axes[1, 0].legend()
+axes[1, 0].grid(True, alpha=0.3, axis='y')
+
+# Plot 5: Problem-solution similarity
+axes[1, 1].boxplot([
+    nlp_viz[nlp_viz['is_effective'] == 1]['problem_solution_similarity'],
+    nlp_viz[nlp_viz['is_effective'] == 0]['problem_solution_similarity']
+])
+axes[1, 1].set_xticklabels(['Effective', 'Not Effective'])
+axes[1, 1].set_title('Problem-Solution Text Coherence')
+axes[1, 1].set_ylabel('Similarity Score')
+axes[1, 1].grid(True, alpha=0.3)
+
+# Plot 6: Technical term ratio
+axes[1, 2].boxplot([
+    nlp_viz[nlp_viz['is_effective'] == 1]['root_cause_technical_term_ratio'],
+    nlp_viz[nlp_viz['is_effective'] == 0]['root_cause_technical_term_ratio']
+])
+axes[1, 2].set_xticklabels(['Effective', 'Not Effective'])
+axes[1, 2].set_title('Technical Term Density')
+axes[1, 2].set_ylabel('Ratio')
+axes[1, 2].grid(True, alpha=0.3)
+
+plt.tight_layout()
+plt.show()
+
+print("\n💡 NLP Insights:")
+print(f"   • Effective 8Ds have {nlp_viz[nlp_viz['is_effective']==1]['root_cause_word_count'].mean():.0f} words on average")
+print(f"   • Not effective 8Ds have {nlp_viz[nlp_viz['is_effective']==0]['root_cause_word_count'].mean():.0f} words on average")
+print(f"   • Effective 8Ds use {nlp_viz[nlp_viz['is_effective']==1]['corrective_action_verb_count'].mean():.1f} action verbs")
+print(f"   • Text coherence (problem-solution): {nlp_viz['problem_solution_similarity'].mean():.3f}")
 
 # COMMAND ----------
 
@@ -742,13 +1585,13 @@ print(f"   Not Effective: {len(closed_8d) - closed_8d['is_effective'].sum()} ({1
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Prepare Features
+# MAGIC ## Prepare Features with NLP
 # MAGIC 
-# MAGIC Select features that may influence 8D effectiveness.
+# MAGIC Select features that may influence 8D effectiveness, including new NLP features.
 
 # COMMAND ----------
 
-# Define 8D features
+# Define 8D features (original)
 EFFECTIVENESS_FEATURES = [
     "days_open",
     "total_scrap_cost",
@@ -765,51 +1608,158 @@ EFFECTIVENESS_CAT_FEATURES = [
     "root_cause_category"
 ]
 
-# Prepare data
+# Add NLP features
+NLP_EFFECTIVENESS_FEATURES = [
+    # Problem description features
+    'problem_sentiment_polarity',
+    'problem_sentiment_subjectivity',
+    'problem_contains_numbers',
+    'problem_technical_term_ratio',
+    
+    # Root cause analysis features
+    'root_cause_sentiment_polarity',
+    'root_cause_avg_word_length',
+    'root_cause_action_verb_count',
+    'root_cause_unique_word_ratio',
+    
+    # Corrective action features
+    'corrective_word_count',
+    'corrective_sentence_count',
+    'corrective_action_verb_count',
+    'corrective_contains_numbers',
+    
+    # 6M category features
+    'mentions_equipment',
+    'mentions_material',
+    'mentions_process',
+    'mentions_human',
+    'mentions_measurement',
+    'mentions_environment',
+    
+    # Coherence feature
+    'problem_solution_similarity'
+]
+
+# Combine original 8D data with NLP features
 effectiveness_df = closed_8d[
-    EFFECTIVENESS_FEATURES + EFFECTIVENESS_CAT_FEATURES + ["is_effective"]
-].dropna()
+    ["created_date"] + EFFECTIVENESS_FEATURES + EFFECTIVENESS_CAT_FEATURES + ["is_effective"]
+].copy()
+
+# Add NLP features
+effectiveness_df = pd.concat([effectiveness_df, nlp_features], axis=1)
+
+# Drop rows with missing values
+effectiveness_df = effectiveness_df.dropna()
 
 # Encode categorical features
 for col in EFFECTIVENESS_CAT_FEATURES:
     le = LabelEncoder()
     effectiveness_df[f"{col}_enc"] = le.fit_transform(effectiveness_df[col].astype(str))
 
-print(f"📊 Effectiveness Training Data: {len(effectiveness_df):,} records")
+print(f"📊 Effectiveness Training Data with NLP Features:")
+print(f"   Records: {len(effectiveness_df):,}")
+print(f"   Original Features: {len(EFFECTIVENESS_FEATURES + EFFECTIVENESS_CAT_FEATURES)}")
+print(f"   NLP Features: {len(NLP_EFFECTIVENESS_FEATURES)}")
+print(f"   Total Features: {len(EFFECTIVENESS_FEATURES) + len(EFFECTIVENESS_CAT_FEATURES) + len(NLP_EFFECTIVENESS_FEATURES)}")
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Train Effectiveness Model
+# MAGIC ## Train Effectiveness Model with NLP Features
 # MAGIC 
-# MAGIC Train a Gradient Boosting classifier with MLflow tracking.
+# MAGIC Train a Gradient Boosting classifier with enhanced NLP features.
 
 # COMMAND ----------
 
-# Prepare feature matrix
-feature_cols_eff = EFFECTIVENESS_FEATURES + [f"{col}_enc" for col in EFFECTIVENESS_CAT_FEATURES]
+# Prepare feature matrix with NLP features
+feature_cols_eff = (EFFECTIVENESS_FEATURES + 
+                    [f"{col}_enc" for col in EFFECTIVENESS_CAT_FEATURES] + 
+                    NLP_EFFECTIVENESS_FEATURES)
+
+# Verify all features exist in dataframe
+print("\n🔍 Verifying NLP Feature Integration...")
+missing_features = [col for col in feature_cols_eff if col not in effectiveness_df.columns]
+if missing_features:
+    print(f"❌ ERROR: Missing features: {missing_features}")
+    raise ValueError(f"Missing required features: {missing_features}")
+else:
+    print(f"✅ All {len(feature_cols_eff)} features present in dataframe")
+
+# Check for NaN values in feature columns
+nan_counts = effectiveness_df[feature_cols_eff].isna().sum()
+if nan_counts.sum() > 0:
+    print(f"⚠️  WARNING: NaN values detected in features:")
+    print(nan_counts[nan_counts > 0])
+else:
+    print(f"✅ No NaN values in feature columns")
+
+# Verify feature types
+print(f"\n📊 Feature Type Distribution:")
+print(f"   Numeric Features: {len([col for col in feature_cols_eff if effectiveness_df[col].dtype in ['int64', 'float64']])}")
+print(f"   Categorical/Encoded: {len([col for col in feature_cols_eff if col.endswith('_enc')])}")
 
 X_eff = effectiveness_df[feature_cols_eff].values
 y_eff = effectiveness_df["is_effective"].values
 
-# Train/test split
-X_train_eff, X_test_eff, y_train_eff, y_test_eff = train_test_split(
-    X_eff, y_eff, test_size=0.2, random_state=42
-)
+print(f"\n📊 Feature Matrix Shape:")
+print(f"   X shape: {X_eff.shape} (samples × features)")
+print(f"   y shape: {y_eff.shape}")
+print(f"   Feature density: {(X_eff != 0).sum() / X_eff.size:.1%} non-zero values")
 
-print(f"📊 Data Split:")
-print(f"   Training: {len(X_train_eff):,}")
-print(f"   Testing: {len(X_test_eff):,}")
+# Temporal train/test split for 8D effectiveness
+print(f"\n🔄 Performing Temporal Split...")
+
+# Sort by created_date
+effectiveness_df_sorted = effectiveness_df.sort_values('created_date').reset_index(drop=True)
+
+# Calculate split point (80% for training)
+split_idx_eff = int(len(effectiveness_df_sorted) * 0.8)
+split_date_eff = effectiveness_df_sorted.loc[split_idx_eff, 'created_date']
+
+# Split into train and test based on date
+train_mask_eff = effectiveness_df_sorted['created_date'] < split_date_eff
+test_mask_eff = effectiveness_df_sorted['created_date'] >= split_date_eff
+
+train_set_eff = effectiveness_df_sorted[train_mask_eff]
+test_set_eff = effectiveness_df_sorted[test_mask_eff]
+
+# Prepare X and y
+X_train_eff = train_set_eff[feature_cols_eff].values
+y_train_eff = train_set_eff["is_effective"].values
+
+X_test_eff = test_set_eff[feature_cols_eff].values
+y_test_eff = test_set_eff["is_effective"].values
+
+print(f"📊 Temporal Data Split for 8D Effectiveness:")
+print(f"{'='*70}")
+print(f"\n📅 Training Set:")
+print(f"   Date Range: {train_set_eff['created_date'].min().date()} to {train_set_eff['created_date'].max().date()}")
+print(f"   Samples: {len(X_train_eff):,}")
+print(f"   Effective: {y_train_eff.sum():,} ({y_train_eff.mean():.1%})")
+
+print(f"\n📅 Test Set:")
+print(f"   Date Range: {test_set_eff['created_date'].min().date()} to {test_set_eff['created_date'].max().date()}")
+print(f"   Samples: {len(X_test_eff):,}")
+print(f"   Effective: {y_test_eff.sum():,} ({y_test_eff.mean():.1%})")
+
+print(f"\n🔒 Temporal Split Ensures:")
+print(f"   ✅ Training on older 8Ds (before {split_date_eff.date()})")
+print(f"   ✅ Testing on newer 8Ds (from {split_date_eff.date()} onward)")
+print(f"   ✅ No future information leaking into training")
 
 # COMMAND ----------
 
 # Train effectiveness predictor
-with mlflow.start_run(run_name="8d_effectiveness_predictor") as run:
+with mlflow.start_run(run_name="8d_effectiveness_predictor_nlp") as run:
     
     # Log parameters
     mlflow.log_param("model_type", "GradientBoostingClassifier")
     mlflow.log_param("dataset_size", len(effectiveness_df))
-    mlflow.log_param("feature_list", json.dumps(feature_cols_eff))
+    mlflow.log_param("num_features", len(feature_cols_eff))
+    mlflow.log_param("num_nlp_features", len(NLP_EFFECTIVENESS_FEATURES))
+    mlflow.log_param("feature_list", json.dumps(feature_cols_eff[:20]))  # Log first 20 for brevity
+    mlflow.log_param("split_method", "temporal")
+    mlflow.log_param("split_date", str(split_date_eff.date()))
     
     # Define model
     eff_model = GradientBoostingClassifier(
@@ -867,9 +1817,9 @@ with mlflow.start_run(run_name="8d_effectiveness_predictor") as run:
     mlflow.sklearn.log_model(eff_model, "model")
     
     # Print results
-    print(f"\n{'='*60}")
-    print(f"✅ Model: 8D Effectiveness Predictor")
-    print(f"{'='*60}")
+    print(f"\n{'='*70}")
+    print(f"✅ Model: 8D Effectiveness Predictor (with NLP Features)")
+    print(f"{'='*70}")
     print(f"\n📊 Test Metrics:")
     print(f"   Accuracy:  {accuracy_eff:.4f}")
     print(f"   Precision: {precision_eff:.4f}")
@@ -877,6 +1827,10 @@ with mlflow.start_run(run_name="8d_effectiveness_predictor") as run:
     print(f"   F1 Score:  {f1_eff:.4f}")
     if auc_eff:
         print(f"   AUC-ROC:   {auc_eff:.4f}")
+    print(f"\n📊 Features Used:")
+    print(f"   Original: {len(EFFECTIVENESS_FEATURES + EFFECTIVENESS_CAT_FEATURES)}")
+    print(f"   NLP: {len(NLP_EFFECTIVENESS_FEATURES)}")
+    print(f"   Total: {len(feature_cols_eff)}")
     print(f"\n🔗 MLflow Run ID: {run.info.run_id}")
 
 # COMMAND ----------
@@ -900,6 +1854,178 @@ print("\n💡 Key Insights:")
 print("   - Longer root cause analysis text correlates with effectiveness")
 print("   - Days open matters - faster isn't always better")
 print("   - Higher scrap cost drives more thorough investigations")
+print("   - NLP features capture text quality and thoroughness")
+
+# Display top NLP features
+nlp_importance = eff_importance[eff_importance['feature'].isin(NLP_EFFECTIVENESS_FEATURES)].head(10)
+if len(nlp_importance) > 0:
+    print(f"\n📝 Top NLP Features by Importance:")
+    for _, row in nlp_importance.iterrows():
+        print(f"   • {row['feature']}: {row['importance']:.4f}")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 🎯 Ensemble Model for 8D Effectiveness
+# MAGIC 
+# MAGIC Apply voting classifier ensemble to 8D effectiveness prediction with NLP features.
+
+# COMMAND ----------
+
+print("\n🚀 Training Ensemble for 8D Effectiveness Prediction...")
+
+with mlflow.start_run(run_name="8d_effectiveness_ensemble_nlp") as run:
+    
+    # Log parameters
+    mlflow.log_param("model_type", "VotingClassifier")
+    mlflow.log_param("dataset_size", len(effectiveness_df))
+    mlflow.log_param("num_features", len(feature_cols_eff))
+    mlflow.log_param("num_nlp_features", len(NLP_EFFECTIVENESS_FEATURES))
+    mlflow.log_param("voting_method", "soft")
+    mlflow.log_param("num_base_models", 4)
+    mlflow.log_param("split_method", "temporal")
+    mlflow.log_param("split_date", str(split_date_eff.date()))
+    
+    # Define base models for 8D effectiveness
+    rf_8d = RandomForestClassifier(
+        n_estimators=100,
+        max_depth=10,
+        random_state=42,
+        n_jobs=-1,
+        class_weight='balanced'
+    )
+    
+    gb_8d = GradientBoostingClassifier(
+        n_estimators=100,
+        max_depth=5,
+        learning_rate=0.1,
+        random_state=42
+    )
+    
+    xgb_8d = XGBClassifier(
+        n_estimators=100,
+        max_depth=8,
+        learning_rate=0.1,
+        random_state=42,
+        n_jobs=-1,
+        eval_metric='logloss'
+    )
+    
+    lgbm_8d = LGBMClassifier(
+        n_estimators=100,
+        max_depth=8,
+        learning_rate=0.1,
+        random_state=42,
+        n_jobs=-1,
+        verbose=-1
+    )
+    
+    # Create ensemble
+    voting_8d = VotingClassifier(
+        estimators=[
+            ('rf', rf_8d),
+            ('gb', gb_8d),
+            ('xgb', xgb_8d),
+            ('lgbm', lgbm_8d)
+        ],
+        voting='soft',
+        n_jobs=-1
+    )
+    
+    # Train ensemble
+    print("   Training ensemble...")
+    voting_8d.fit(X_train_eff, y_train_eff)
+    
+    # Predictions
+    y_pred_8d_ensemble = voting_8d.predict(X_test_eff)
+    y_proba_8d_ensemble = voting_8d.predict_proba(X_test_eff)[:, 1]
+    
+    # Metrics
+    accuracy_8d_ensemble = accuracy_score(y_test_eff, y_pred_8d_ensemble)
+    precision_8d_ensemble = precision_score(y_test_eff, y_pred_8d_ensemble)
+    recall_8d_ensemble = recall_score(y_test_eff, y_pred_8d_ensemble)
+    f1_8d_ensemble = f1_score(y_test_eff, y_pred_8d_ensemble)
+    
+    try:
+        auc_8d_ensemble = roc_auc_score(y_test_eff, y_proba_8d_ensemble)
+        mlflow.log_metric("auc_roc", auc_8d_ensemble)
+    except:
+        auc_8d_ensemble = None
+    
+    # Log metrics
+    mlflow.log_metric("accuracy", accuracy_8d_ensemble)
+    mlflow.log_metric("precision", precision_8d_ensemble)
+    mlflow.log_metric("recall", recall_8d_ensemble)
+    mlflow.log_metric("f1_score", f1_8d_ensemble)
+    
+    # Calculate improvement
+    improvement_8d = ((accuracy_8d_ensemble - accuracy_eff) / accuracy_eff) * 100
+    mlflow.log_metric("improvement_over_single_model_pct", improvement_8d)
+    
+    # Individual model performance
+    individual_8d_results = []
+    for name, model in voting_8d.named_estimators_.items():
+        y_pred_ind = model.predict(X_test_eff)
+        acc_ind = accuracy_score(y_test_eff, y_pred_ind)
+        f1_ind = f1_score(y_test_eff, y_pred_ind)
+        
+        individual_8d_results.append({
+            'model': name,
+            'accuracy': acc_ind,
+            'f1_score': f1_ind
+        })
+        
+        mlflow.log_metric(f"{name}_accuracy", acc_ind)
+        mlflow.log_metric(f"{name}_f1", f1_ind)
+    
+    individual_8d_df = pd.DataFrame(individual_8d_results)
+    
+    # Log model
+    mlflow.sklearn.log_model(voting_8d, "model")
+    
+    # Print results
+    print(f"\n{'='*70}")
+    print(f"✅ 8D Effectiveness Ensemble (with NLP)")
+    print(f"{'='*70}")
+    print(f"\n📊 Ensemble Metrics:")
+    print(f"   Accuracy:  {accuracy_8d_ensemble:.4f}")
+    print(f"   Precision: {precision_8d_ensemble:.4f}")
+    print(f"   Recall:    {recall_8d_ensemble:.4f}")
+    print(f"   F1 Score:  {f1_8d_ensemble:.4f}")
+    if auc_8d_ensemble:
+        print(f"   AUC-ROC:   {auc_8d_ensemble:.4f}")
+    
+    print(f"\n📈 Improvement over Single Model:")
+    print(f"   Single GB: {accuracy_eff:.4f}")
+    print(f"   Ensemble:  {accuracy_8d_ensemble:.4f}")
+    print(f"   Change:    {improvement_8d:+.2f}%")
+    
+    print(f"\n📊 Individual Models:")
+    for _, row in individual_8d_df.iterrows():
+        print(f"   {row['model']}: {row['accuracy']:.4f}")
+    
+    print(f"\n🔗 MLflow Run ID: {run.info.run_id}")
+
+# Visualize ensemble vs single model
+fig, ax = plt.subplots(figsize=(10, 6))
+
+models_comp = pd.DataFrame([
+    {'Model': 'Gradient Boosting', 'Accuracy': accuracy_eff, 'F1': f1_eff},
+    {'Model': 'Ensemble', 'Accuracy': accuracy_8d_ensemble, 'F1': f1_8d_ensemble}
+])
+
+x = range(len(models_comp))
+width = 0.35
+ax.bar([i - width/2 for i in x], models_comp['Accuracy'], width, label='Accuracy', alpha=0.8)
+ax.bar([i + width/2 for i in x], models_comp['F1'], width, label='F1 Score', alpha=0.8)
+ax.set_xticks(x)
+ax.set_xticklabels(models_comp['Model'])
+ax.set_ylabel('Score')
+ax.set_title('8D Effectiveness: Ensemble vs Single Model (with NLP Features)', fontsize=14)
+ax.legend()
+ax.grid(True, alpha=0.3, axis='y')
+plt.tight_layout()
+plt.show()
 
 # COMMAND ----------
 
@@ -915,10 +2041,17 @@ print("   - Higher scrap cost drives more thorough investigations")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Build TF-IDF Similarity Index
+# MAGIC ## Build BERT Semantic Similarity Index
 # MAGIC 
-# MAGIC Use TF-IDF (Term Frequency-Inverse Document Frequency) to create
-# MAGIC vector representations of 8D text for similarity matching.
+# MAGIC Use sentence-transformers (BERT-based) to create semantic embeddings
+# MAGIC of 8D text for similarity matching. This provides much better semantic
+# MAGIC understanding than TF-IDF keyword matching.
+# MAGIC 
+# MAGIC **Model**: `all-MiniLM-L6-v2`
+# MAGIC - 384-dimensional embeddings
+# MAGIC - Optimized for semantic similarity
+# MAGIC - Fast inference (~100 sentences/sec)
+# MAGIC - Understands context and meaning, not just keywords
 
 # COMMAND ----------
 
@@ -930,26 +2063,106 @@ eight_d_pd["combined_text"] = (
     eight_d_pd["corrective_actions"].fillna("")
 )
 
-# Create TF-IDF vectors
-tfidf = TfidfVectorizer(
-    max_features=1000,      # Limit vocabulary size
-    stop_words="english",   # Remove common words
-    ngram_range=(1, 2),     # Include bigrams
-    min_df=2                # Minimum document frequency
+print("🔄 Loading BERT model for semantic embeddings...")
+print("   Model: all-MiniLM-L6-v2 (384 dimensions)")
+
+# Load sentence transformer model
+# This is a lightweight but powerful model for semantic similarity
+bert_model = SentenceTransformer('all-MiniLM-L6-v2')
+
+print("✅ Model loaded successfully")
+print("\n🔄 Generating embeddings for all 8D reports...")
+print(f"   Processing {len(eight_d_pd):,} documents...")
+
+# Generate embeddings for all 8D reports
+# This creates a 384-dimensional vector for each document
+eight_d_embeddings = bert_model.encode(
+    eight_d_pd["combined_text"].tolist(),
+    show_progress_bar=True,
+    batch_size=32  # Process in batches for efficiency
 )
 
-tfidf_matrix = tfidf.fit_transform(eight_d_pd["combined_text"])
-
-print(f"📊 TF-IDF Matrix:")
-print(f"   Documents: {tfidf_matrix.shape[0]:,}")
-print(f"   Features (terms): {tfidf_matrix.shape[1]:,}")
+print(f"\n📊 BERT Embedding Matrix:")
+print(f"   Documents: {eight_d_embeddings.shape[0]:,}")
+print(f"   Embedding dimensions: {eight_d_embeddings.shape[1]}")
+print(f"   Memory size: ~{eight_d_embeddings.nbytes / 1024 / 1024:.1f} MB")
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Define Similar 8D Search Function
+# MAGIC ## Compare BERT vs TF-IDF on Sample Queries
 # MAGIC 
-# MAGIC Function to find similar 8Ds based on text similarity.
+# MAGIC Demonstrate the improved semantic understanding of BERT embeddings.
+
+# COMMAND ----------
+
+# Test semantic similarity with BERT vs TF-IDF
+test_queries = [
+    ("Die wear causing dimensional issues", "Tooling degradation leading to out-of-spec parts"),
+    ("Operator training needed", "Insufficient employee skills"),
+    ("Material contamination detected", "Foreign material found in raw steel")
+]
+
+print("🔍 Comparing BERT vs TF-IDF Semantic Similarity\n")
+print("=" * 80)
+
+for q1, q2 in test_queries:
+    # BERT similarity
+    bert_sim = calculate_text_similarity(q1, q2, use_bert=True)
+    
+    # TF-IDF similarity
+    tfidf_sim = calculate_text_similarity(q1, q2, use_bert=False)
+    
+    print(f"\n📝 Query 1: {q1}")
+    print(f"📝 Query 2: {q2}")
+    print(f"   BERT Similarity:   {bert_sim:.3f}")
+    print(f"   TF-IDF Similarity: {tfidf_sim:.3f}")
+    print(f"   BERT captures {(bert_sim - tfidf_sim) * 100:+.1f}% more semantic meaning")
+    print("-" * 80)
+
+print("\n💡 Insight: BERT understands semantic meaning (synonyms, context)")
+print("   while TF-IDF only matches keywords.")
+
+# Visualize the comparison
+fig, ax = plt.subplots(figsize=(12, 6))
+
+comparison_data = []
+for q1, q2 in test_queries:
+    bert_sim = calculate_text_similarity(q1, q2, use_bert=True)
+    tfidf_sim = calculate_text_similarity(q1, q2, use_bert=False)
+    
+    label = q1[:30] + "..."
+    comparison_data.append({
+        'query': label,
+        'BERT': bert_sim,
+        'TF-IDF': tfidf_sim
+    })
+
+comp_df = pd.DataFrame(comparison_data)
+
+x = range(len(comp_df))
+width = 0.35
+
+ax.bar([i - width/2 for i in x], comp_df['BERT'], width, label='BERT (Semantic)', alpha=0.8, color='green')
+ax.bar([i + width/2 for i in x], comp_df['TF-IDF'], width, label='TF-IDF (Keyword)', alpha=0.8, color='steelblue')
+
+ax.set_ylabel('Similarity Score', fontsize=12)
+ax.set_title('BERT vs TF-IDF: Semantic Understanding Comparison', fontsize=14)
+ax.set_xticks(x)
+ax.set_xticklabels(comp_df['query'], rotation=15, ha='right')
+ax.legend()
+ax.grid(True, alpha=0.3, axis='y')
+plt.tight_layout()
+plt.show()
+
+print(f"\n📊 Average Improvement: {((comp_df['BERT'].mean() - comp_df['TF-IDF'].mean()) / comp_df['TF-IDF'].mean() * 100):+.1f}%")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Define BERT-Based Similar 8D Search Function
+# MAGIC 
+# MAGIC Function to find similar 8Ds based on semantic similarity using BERT embeddings.
 
 # COMMAND ----------
 
@@ -959,7 +2172,7 @@ def find_similar_8ds(
     only_effective: bool = False
 ) -> pd.DataFrame:
     """
-    Find similar historical 8D reports based on text similarity.
+    Find similar historical 8D reports based on semantic similarity using BERT.
     
     Parameters:
     -----------
@@ -975,11 +2188,11 @@ def find_similar_8ds(
     pd.DataFrame
         Similar 8Ds with corrective actions and effectiveness
     """
-    # Transform query to TF-IDF vector
-    query_vec = tfidf.transform([query_text])
+    # Generate BERT embedding for query
+    query_embedding = bert_model.encode([query_text])
     
-    # Calculate cosine similarities
-    similarities = cosine_similarity(query_vec, tfidf_matrix).flatten()
+    # Calculate cosine similarities with all 8D embeddings
+    similarities = sklearn_cosine_similarity(query_embedding, eight_d_embeddings).flatten()
     
     # Get top matches
     if only_effective:
@@ -1001,12 +2214,146 @@ def find_similar_8ds(
     
     return results
 
+print("✅ BERT-based similarity search function defined")
+
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Example: Find Similar 8Ds
+# MAGIC ## 🔬 Advanced: Hybrid Search (BERT + Metadata Filtering)
 # MAGIC 
-# MAGIC Test the similarity search with a sample query.
+# MAGIC Combine semantic similarity with metadata filters for even more precise results.
+
+# COMMAND ----------
+
+def find_similar_8ds_hybrid(
+    query_text: str,
+    top_n: int = 5,
+    only_effective: bool = False,
+    defect_category: str = None,
+    root_cause_category: str = None,
+    min_cost: float = None,
+    max_cost: float = None
+) -> pd.DataFrame:
+    """
+    Advanced hybrid search combining BERT semantic similarity with metadata filters.
+    
+    Parameters:
+    -----------
+    query_text : str
+        Description of the new quality issue
+    top_n : int
+        Number of similar 8Ds to return
+    only_effective : bool
+        If True, only return effective 8Ds
+    defect_category : str
+        Filter by specific defect category
+    root_cause_category : str
+        Filter by specific root cause
+    min_cost : float
+        Minimum scrap cost threshold
+    max_cost : float
+        Maximum scrap cost threshold
+        
+    Returns:
+    --------
+    pd.DataFrame
+        Similar 8Ds matching all criteria
+    """
+    # Generate BERT embedding for query
+    query_embedding = bert_model.encode([query_text])
+    
+    # Calculate similarities
+    similarities = sklearn_cosine_similarity(query_embedding, eight_d_embeddings).flatten()
+    
+    # Start with all indices
+    mask = np.ones(len(eight_d_pd), dtype=bool)
+    
+    # Apply filters
+    if only_effective:
+        mask &= (eight_d_pd["verification_result"] == "Effective").values
+    
+    if defect_category:
+        mask &= (eight_d_pd["defect_category"] == defect_category).values
+    
+    if root_cause_category:
+        mask &= (eight_d_pd["root_cause_category"] == root_cause_category).values
+    
+    if min_cost is not None:
+        mask &= (eight_d_pd["total_scrap_cost"] >= min_cost).values
+    
+    if max_cost is not None:
+        mask &= (eight_d_pd["total_scrap_cost"] <= max_cost).values
+    
+    # Get filtered indices
+    filtered_indices = np.where(mask)[0]
+    
+    if len(filtered_indices) == 0:
+        print("⚠️ No 8Ds match the specified criteria")
+        return pd.DataFrame()
+    
+    # Get top matches from filtered set
+    filtered_similarities = similarities[filtered_indices]
+    top_local_indices = filtered_similarities.argsort()[-min(top_n, len(filtered_indices)):][::-1]
+    top_indices = filtered_indices[top_local_indices]
+    
+    # Build results
+    results = eight_d_pd.iloc[top_indices][[
+        "eight_d_id", "title", "defect_category", "root_cause_category",
+        "corrective_actions", "verification_result", "total_scrap_cost"
+    ]].copy()
+    results["similarity_score"] = similarities[top_indices]
+    
+    return results
+
+print("✅ Hybrid search function defined")
+print("   Combines: BERT semantic similarity + metadata filtering")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Test Hybrid Search
+# MAGIC 
+# MAGIC Example: Find dimensional defects caused by tooling, but only effective high-cost cases.
+
+# COMMAND ----------
+
+# Example: Targeted hybrid search
+hybrid_query = "Tooling wear causing dimensional variation in stamped parts"
+
+print("🔍 Hybrid Search Example:")
+print(f"   Query: {hybrid_query}")
+print(f"   Filters: Effective only, Dimensional defects, Cost > $5000\n")
+
+hybrid_results = find_similar_8ds_hybrid(
+    query_text=hybrid_query,
+    top_n=5,
+    only_effective=True,
+    defect_category="Dimensional",
+    min_cost=5000
+)
+
+if len(hybrid_results) > 0:
+    print(f"✅ Found {len(hybrid_results)} matching 8Ds:\n")
+    print("-" * 80)
+    
+    for idx, row in hybrid_results.iterrows():
+        print(f"\n📋 {row['eight_d_id']} (Similarity: {row['similarity_score']:.1%})")
+        print(f"   Category: {row['defect_category']} / {row['root_cause_category']}")
+        print(f"   Cost: ${row['total_scrap_cost']:,.2f}")
+        print(f"   Action: {str(row['corrective_actions'])[:120]}...")
+else:
+    print("⚠️ No results found with these criteria")
+
+print("\n💡 Use Case: Find effective solutions for specific defect types")
+print("   within your cost range, using semantic similarity.")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Example: Find Similar 8Ds with BERT
+# MAGIC 
+# MAGIC Test the BERT-based semantic search with sample queries.
+# MAGIC BERT understands semantic meaning, not just keyword matching.
 
 # COMMAND ----------
 
@@ -1017,40 +2364,46 @@ Multiple parts showing out-of-tolerance measurements on width dimension.
 Suspected die wear issue causing progressive dimension drift.
 """
 
-# Find similar 8Ds (including all results)
+# Find similar 8Ds using BERT embeddings
 similar_8ds = find_similar_8ds(example_query, top_n=5)
 
-print("🔍 Similar Historical 8Ds for Query:")
+print("🔍 Similar Historical 8Ds for Query (Using BERT Embeddings):")
 print("-" * 70)
 print(f"Query: {example_query[:100]}...")
 print("-" * 70)
 
-for _, row in similar_8ds.iterrows():
-    print(f"\n📋 8D: {row['eight_d_id']} (Similarity: {row['similarity_score']:.1%})")
+for idx, row in similar_8ds.iterrows():
+    print(f"\n📋 8D: {row['eight_d_id']} (Semantic Similarity: {row['similarity_score']:.1%})")
     print(f"   Title: {row['title'][:60]}...")
     print(f"   Root Cause: {row['root_cause_category']}")
     print(f"   Verification: {row['verification_result']}")
     print(f"   Corrective Action: {str(row['corrective_actions'])[:150]}...")
 
+print(f"\n💡 BERT Advantage: Found semantically similar 8Ds even if they use")
+print(f"   different terminology (e.g., 'tooling degradation' vs 'die wear')")
+
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Find Only Effective Solutions
+# MAGIC ## Find Only Effective Solutions (BERT)
 # MAGIC 
-# MAGIC Search for similar 8Ds that had **effective** corrective actions.
+# MAGIC Search for similar 8Ds that had **effective** corrective actions using semantic matching.
 
 # COMMAND ----------
 
 # Find similar 8Ds with effective solutions only
 effective_8ds = find_similar_8ds(example_query, top_n=5, only_effective=True)
 
-print("✅ Similar 8Ds with EFFECTIVE Corrective Actions:")
+print("✅ Similar 8Ds with EFFECTIVE Corrective Actions (BERT-based):")
 print("-" * 70)
 
-for _, row in effective_8ds.iterrows():
-    print(f"\n📋 8D: {row['eight_d_id']} (Similarity: {row['similarity_score']:.1%})")
+for idx, row in effective_8ds.iterrows():
+    print(f"\n📋 8D: {row['eight_d_id']} (Semantic Similarity: {row['similarity_score']:.1%})")
     print(f"   Root Cause: {row['root_cause_category']}")
     print(f"   Corrective Action: {str(row['corrective_actions'])[:200]}...")
+
+print(f"\n💡 Use Case: When opening a new 8D, search for similar effective solutions")
+print(f"   to accelerate root cause analysis and corrective action planning.")
 
 # COMMAND ----------
 
@@ -1251,18 +2604,27 @@ print("=" * 70)
 print("📊 ROOT CAUSE ANALYSIS & 8D VALIDATION - SUMMARY")
 print("=" * 70)
 
-print(f"\n🎯 Root Cause Classification Model:")
-print(f"   Accuracy: {accuracy:.1%}")
-print(f"   Agreement with Quality Team: {agreement_rate:.1%}")
+print(f"\n🎯 Root Cause Classification Models:")
+print(f"   Random Forest Accuracy: {accuracy:.1%}")
+print(f"   Ensemble Accuracy: {accuracy_ensemble:.1%}")
+print(f"   Ensemble Improvement: {improvement:+.2f}%")
+print(f"   Agreement with Quality Team: {agreement_rate_ensemble:.1%}")
 print(f"   High-Confidence Disagreements: {len(high_conf_disagreements):,}")
+
+print(f"\n🔄 Ensemble Configuration:")
+print(f"   Models: Random Forest, Gradient Boosting, XGBoost, LightGBM")
+print(f"   Voting Method: Soft (probability-based)")
+print(f"   Cross-Validation: {cv_scores_ensemble.mean():.4f} ± {cv_scores_ensemble.std()*2:.4f}")
 
 print(f"\n📈 8D Effectiveness Predictor:")
 print(f"   Accuracy: {accuracy_eff:.1%}")
 print(f"   Key Factors: Root cause word count, days open, defect severity")
 
-print(f"\n🔍 Similar 8D Finder:")
+print(f"\n🔍 Similar 8D Finder (BERT-based):")
 print(f"   8Ds Indexed: {len(eight_d_pd):,}")
-print(f"   TF-IDF Features: {tfidf_matrix.shape[1]:,}")
+print(f"   Embedding Model: all-MiniLM-L6-v2")
+print(f"   Embedding Dimensions: {eight_d_embeddings.shape[1]}")
+print(f"   Semantic Understanding: ✅ (understands synonyms & context)")
 
 print(f"\n📁 Output Tables:")
 print(f"   - {FULL_SCHEMA}.ml_root_cause_validation")

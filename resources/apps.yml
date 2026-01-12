@@ -13,19 +13,12 @@ resources:
         Scrap Reduction Intelligence Platform - Interactive dashboards, 
         What-If scenario analysis, ML insights, and AI-powered assistant.
       
-      # Source code location - automatically synced to workspace
+      # Source code location
       source_code_path: ../app
       
-      # Resources (SQL Warehouse and other Databricks resources)
+      # Resources (Serverless SQL Warehouse access)
       resources:
         - name: sql-warehouse
           sql_warehouse:
             id: ${var.warehouse_id}
             permission: CAN_USE
-      
-      # Permissions for the app (valid levels: CAN_MANAGE, CAN_USE)
-      permissions:
-        - level: CAN_MANAGE
-          user_name: ${workspace.current_user.userName}
-        - level: CAN_USE
-          group_name: users

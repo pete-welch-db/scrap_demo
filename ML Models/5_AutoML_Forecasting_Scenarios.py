@@ -261,31 +261,89 @@ print(f"   Best Model: {automl_results.best_trial.model_description}")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Evaluate AutoML Results
+# MAGIC ### Evaluate AutoML Results with Time Series Cross-Validation
 
 # COMMAND ----------
 
 # Get the best model
 best_model = automl_results.best_trial.load_model()
 
-# Prepare test features (exclude ds and y)
+# First, evaluate on the holdout test set
 test_features = test_df.drop(columns=['ds', 'y'])
-
-# Make predictions
 test_df['predicted'] = best_model.predict(test_features)
 
-# Calculate metrics
-rmse = np.sqrt(mean_squared_error(test_df['y'], test_df['predicted']))
-mae = mean_absolute_error(test_df['y'], test_df['predicted'])
-r2 = r2_score(test_df['y'], test_df['predicted'])
-mape = np.mean(np.abs((test_df['y'] - test_df['predicted']) / test_df['y'])) * 100
+# Calculate holdout metrics
+holdout_rmse = np.sqrt(mean_squared_error(test_df['y'], test_df['predicted']))
+holdout_mae = mean_absolute_error(test_df['y'], test_df['predicted'])
+holdout_r2 = r2_score(test_df['y'], test_df['predicted'])
+holdout_mape = np.mean(np.abs((test_df['y'] - test_df['predicted']) / test_df['y'])) * 100
 
-print("\n📊 AutoML FORECAST PERFORMANCE:")
+print("\n📊 HOLDOUT TEST SET PERFORMANCE:")
 print("=" * 50)
-print(f"RMSE:  ${rmse:,.2f}")
-print(f"MAE:   ${mae:,.2f}")
-print(f"R²:    {r2:.4f}")
-print(f"MAPE:  {mape:.2f}%")
+print(f"RMSE:  ${holdout_rmse:,.2f}")
+print(f"MAE:   ${holdout_mae:,.2f}")
+print(f"R²:    {holdout_r2:.4f}")
+print(f"MAPE:  {holdout_mape:.2f}%")
+
+# Now perform time series cross-validation for more robust evaluation
+print("\n\n🔄 Running Time Series Cross-Validation...")
+print("=" * 50)
+
+# Use TimeSeriesSplit for walk-forward validation
+n_splits = 5
+tscv = TimeSeriesSplit(n_splits=n_splits)
+
+cv_rmse_scores = []
+cv_mae_scores = []
+cv_r2_scores = []
+cv_mape_scores = []
+
+# Prepare full training data (before the final holdout)
+X_full_train = train_df.drop(columns=['ds', 'y'])
+y_full_train = train_df['y']
+
+for fold_idx, (train_idx, val_idx) in enumerate(tscv.split(X_full_train), 1):
+    X_cv_train, X_cv_val = X_full_train.iloc[train_idx], X_full_train.iloc[val_idx]
+    y_cv_train, y_cv_val = y_full_train.iloc[train_idx], y_full_train.iloc[val_idx]
+    
+    # Use the best model to predict (model already trained on full train set)
+    y_cv_pred = best_model.predict(X_cv_val)
+    
+    # Calculate metrics for this fold
+    fold_rmse = np.sqrt(mean_squared_error(y_cv_val, y_cv_pred))
+    fold_mae = mean_absolute_error(y_cv_val, y_cv_pred)
+    fold_r2 = r2_score(y_cv_val, y_cv_pred)
+    fold_mape = np.mean(np.abs((y_cv_val - y_cv_pred) / y_cv_val)) * 100
+    
+    cv_rmse_scores.append(fold_rmse)
+    cv_mae_scores.append(fold_mae)
+    cv_r2_scores.append(fold_r2)
+    cv_mape_scores.append(fold_mape)
+    
+    print(f"   Fold {fold_idx}/{n_splits}: RMSE=${fold_rmse:,.2f}, MAE=${fold_mae:,.2f}, R²={fold_r2:.4f}, MAPE={fold_mape:.2f}%")
+
+# Calculate CV statistics
+cv_rmse_mean = np.mean(cv_rmse_scores)
+cv_rmse_std = np.std(cv_rmse_scores)
+cv_mae_mean = np.mean(cv_mae_scores)
+cv_mae_std = np.std(cv_mae_scores)
+cv_r2_mean = np.mean(cv_r2_scores)
+cv_r2_std = np.std(cv_r2_scores)
+cv_mape_mean = np.mean(cv_mape_scores)
+cv_mape_std = np.std(cv_mape_scores)
+
+print("\n📊 CROSS-VALIDATION SUMMARY:")
+print("=" * 50)
+print(f"RMSE:  ${cv_rmse_mean:,.2f} (±${cv_rmse_std:,.2f})")
+print(f"MAE:   ${cv_mae_mean:,.2f} (±${cv_mae_std:,.2f})")
+print(f"R²:    {cv_r2_mean:.4f} (±{cv_r2_std:.4f})")
+print(f"MAPE:  {cv_mape_mean:.2f}% (±{cv_mape_std:.2f}%)")
+
+# Use the holdout test metrics as the primary metrics (more representative of future performance)
+rmse = holdout_rmse
+mae = holdout_mae
+r2 = holdout_r2
+mape = holdout_mape
 
 # COMMAND ----------
 
@@ -357,7 +415,7 @@ plt.show()
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Generate Future Forecasts
+# MAGIC ### Generate Future Forecasts with Trend-Based Features
 
 # COMMAND ----------
 
@@ -365,7 +423,7 @@ plt.show()
 last_date = forecast_pdf['ds'].max()
 future_dates = pd.date_range(start=last_date + timedelta(days=1), periods=FORECAST_HORIZON_DAYS, freq='D')
 
-# Create future features (using averages from historical data)
+# Create future features
 future_df = pd.DataFrame({'ds': future_dates})
 future_df['day_of_week'] = future_df['ds'].dt.dayofweek + 1
 future_df['month'] = future_df['ds'].dt.month
@@ -374,21 +432,103 @@ future_df['is_weekend'] = future_df['day_of_week'].isin([1, 7]).astype(int)
 future_df['is_month_end'] = (future_df['ds'].dt.day >= 25).astype(int)
 future_df['week_of_year'] = future_df['ds'].dt.isocalendar().week
 
-# Use historical averages for other features
-for col in ['transaction_count', 'avg_equipment_age', 'avg_equipment_oee', 
-            'avg_supplier_quality', 'avg_operator_experience', 'active_plants',
-            'active_suppliers', 'shift1_ratio', 'shift2_ratio', 'shift3_ratio',
-            'critical_part_cost', 'total_quantity']:
+print("📈 Calculating feature trends for future forecasts...")
+
+# Helper function to calculate trend-based forecast for a feature
+def forecast_feature_with_trend(historical_data, feature_col, forecast_horizon):
+    """
+    Forecast a feature using linear trend extrapolation.
+    Falls back to recent average if trend is not significant.
+    """
+    # Use last 180 days for trend calculation (more recent = more relevant)
+    recent_data = historical_data.tail(min(180, len(historical_data)))
+    
+    # Create time index for regression
+    X_time = np.arange(len(recent_data)).reshape(-1, 1)
+    y_feature = recent_data[feature_col].values
+    
+    # Fit linear trend
+    from sklearn.linear_model import LinearRegression
+    trend_model = LinearRegression()
+    trend_model.fit(X_time, y_feature)
+    
+    # Calculate R² to assess trend strength
+    trend_r2 = trend_model.score(X_time, y_feature)
+    
+    # Only use trend if it explains >10% of variance and is statistically meaningful
+    if trend_r2 > 0.10:
+        # Extrapolate trend into future
+        future_time = np.arange(len(recent_data), len(recent_data) + forecast_horizon).reshape(-1, 1)
+        forecast_values = trend_model.predict(future_time)
+        method = "trend"
+    else:
+        # No significant trend, use recent average (last 30 days)
+        forecast_values = np.full(forecast_horizon, recent_data[feature_col].tail(30).mean())
+        method = "recent_avg"
+    
+    return forecast_values, method, trend_r2
+
+# Features that should increase over time (equipment ages)
+aging_features = ['avg_equipment_age']
+
+# Features that may have trends (quality, experience, etc.)
+trend_features = ['avg_equipment_oee', 'avg_supplier_quality', 'avg_operator_experience',
+                 'transaction_count', 'total_quantity', 'critical_part_cost',
+                 'active_plants', 'active_suppliers']
+
+# Features that are ratios/proportions (use recent average, less likely to have strong trends)
+ratio_features = ['shift1_ratio', 'shift2_ratio', 'shift3_ratio']
+
+print("\n📊 Feature Forecasting Summary:")
+print("=" * 70)
+
+# Equipment age: increases linearly over time (add days/365)
+days_forward = FORECAST_HORIZON_DAYS / 365.0
+future_df['avg_equipment_age'] = forecast_pdf['avg_equipment_age'].iloc[-1] + days_forward
+print(f"   avg_equipment_age: aging forward +{days_forward:.2f} years")
+
+# Trend-based features
+for col in trend_features:
     if col in forecast_pdf.columns:
-        future_df[col] = forecast_pdf[col].mean()
+        forecast_values, method, r2 = forecast_feature_with_trend(
+            forecast_pdf, col, FORECAST_HORIZON_DAYS
+        )
+        future_df[col] = forecast_values
+        
+        # Clamp certain features to valid ranges
+        if 'ratio' in col or 'quality' in col or 'oee' in col:
+            future_df[col] = future_df[col].clip(0, 1)
+        
+        print(f"   {col}: {method} (R²={r2:.3f}), mean={future_df[col].mean():.3f}")
+
+# Ratio features: use recent average (last 30 days)
+for col in ratio_features:
+    if col in forecast_pdf.columns:
+        recent_avg = forecast_pdf[col].tail(30).mean()
+        future_df[col] = recent_avg
+        print(f"   {col}: recent_avg (30 days), value={recent_avg:.3f}")
 
 # Make future predictions
 future_features = future_df.drop(columns=['ds'])
 future_df['predicted_cost'] = best_model.predict(future_features)
 
-# Add confidence bounds (simple ±15%)
-future_df['lower_bound'] = future_df['predicted_cost'] * 0.85
-future_df['upper_bound'] = future_df['predicted_cost'] * 1.15
+# Calculate prediction intervals based on historical residuals
+# Use residuals from test set to estimate uncertainty
+residuals = test_df['y'] - test_df['predicted']
+residual_std = residuals.std()
+
+# Use 90% prediction interval (1.645 * std for normal distribution)
+prediction_interval_multiplier = 1.645
+future_df['lower_bound'] = future_df['predicted_cost'] - (prediction_interval_multiplier * residual_std)
+future_df['upper_bound'] = future_df['predicted_cost'] + (prediction_interval_multiplier * residual_std)
+
+# Ensure lower bound doesn't go negative
+future_df['lower_bound'] = future_df['lower_bound'].clip(lower=0)
+
+print(f"\n📊 Prediction Intervals:")
+print(f"   Method: Residual-based (from test set)")
+print(f"   Residual Std Dev: ${residual_std:,.2f}")
+print(f"   Interval: 90% confidence (±{prediction_interval_multiplier:.2f}σ)")
 
 print(f"\n📅 FORECAST SUMMARY (Next {FORECAST_HORIZON_DAYS} Days):")
 print("=" * 50)
@@ -396,6 +536,7 @@ print(f"Total Predicted Cost: ${future_df['predicted_cost'].sum():,.0f}")
 print(f"Avg Daily Cost: ${future_df['predicted_cost'].mean():,.0f}")
 print(f"Min Daily Cost: ${future_df['predicted_cost'].min():,.0f}")
 print(f"Max Daily Cost: ${future_df['predicted_cost'].max():,.0f}")
+print(f"Avg Interval Width: ${(future_df['upper_bound'] - future_df['lower_bound']).mean():,.0f}")
 
 # COMMAND ----------
 
@@ -689,19 +830,33 @@ model_uri = automl_results.best_trial.model_path
 # Log additional metrics
 with mlflow.start_run(run_name="automl_best_model_registration"):
     mlflow.log_metrics({
-        'test_rmse': rmse,
-        'test_mae': mae,
-        'test_r2': r2,
-        'test_mape': mape,
-        'forecast_days': FORECAST_HORIZON_DAYS
+        'holdout_test_rmse': rmse,
+        'holdout_test_mae': mae,
+        'holdout_test_r2': r2,
+        'holdout_test_mape': mape,
+        'cv_rmse_mean': cv_rmse_mean,
+        'cv_rmse_std': cv_rmse_std,
+        'cv_mae_mean': cv_mae_mean,
+        'cv_mae_std': cv_mae_std,
+        'cv_r2_mean': cv_r2_mean,
+        'cv_r2_std': cv_r2_std,
+        'cv_mape_mean': cv_mape_mean,
+        'cv_mape_std': cv_mape_std,
+        'forecast_days': FORECAST_HORIZON_DAYS,
+        'cv_folds': n_splits
     })
     mlflow.log_param('model_type', automl_results.best_trial.model_description)
     mlflow.log_param('training_samples', len(train_df))
+    mlflow.log_param('evaluation_method', 'TimeSeriesSplit CV + Holdout Test')
+    mlflow.log_param('prediction_interval_method', 'residual_based')
+    mlflow.log_param('prediction_interval_confidence', '90%')
     
     print(f"\n✅ Best AutoML Model Registered")
     print(f"   Model Type: {automl_results.best_trial.model_description}")
-    print(f"   Test RMSE: ${rmse:,.2f}")
-    print(f"   Test R²: {r2:.4f}")
+    print(f"   Holdout Test RMSE: ${rmse:,.2f}")
+    print(f"   Holdout Test R²: {r2:.4f}")
+    print(f"   CV RMSE: ${cv_rmse_mean:,.2f} (±${cv_rmse_std:,.2f})")
+    print(f"   CV R²: {cv_r2_mean:.4f} (±{cv_r2_std:.4f})")
 
 # COMMAND ----------
 

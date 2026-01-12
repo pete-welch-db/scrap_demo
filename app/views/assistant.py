@@ -15,13 +15,19 @@ def render_assistant_page():
     """Render the AI Assistant page."""
     
     st.markdown("""
-    <h1 style="margin-bottom: 8px;">🤖 AI Assistant</h1>
-    <p style="font-size: 1rem; color: #6b6b69; margin-bottom: 16px;">
+    <h1>🤖 AI Assistant</h1>
+    <p style="font-size: 1.1rem; color: #64748b; margin-bottom: 24px;">
         Chat with Databricks Genie to analyze scrap data using natural language
     </p>
     """, unsafe_allow_html=True)
     
-    render_chat_interface()
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        render_chat_interface()
+    
+    with col2:
+        render_ai_integrations()
 
 
 def format_genie_response(response: GenieResponse) -> None:
@@ -46,7 +52,7 @@ def format_genie_response(response: GenieResponse) -> None:
         st.markdown("---")
         st.markdown("**💡 Suggested follow-ups:**")
         for q in response.suggested_questions:
-            if st.button(f"→ {q}", key=f"suggest_{hash(q)}", width='stretch'):
+            if st.button(f"→ {q}", key=f"suggest_{hash(q)}", use_container_width=True):
                 st.session_state.pending_question = q
                 st.session_state.messages.append({"role": "user", "content": q})
                 st.rerun()
@@ -54,6 +60,8 @@ def format_genie_response(response: GenieResponse) -> None:
 
 def render_chat_interface():
     """Render the chat interface with Genie API integration."""
+    
+    st.markdown("### 💬 Chat with Genie")
     
     # Initialize session state
     if "messages" not in st.session_state:
@@ -97,26 +105,6 @@ Ask me anything about your scrap data!""",
             else:
                 # Render plain text
                 st.markdown(msg["content"])
-    
-    # Quick Questions - show above chat input if no conversation yet
-    if len(st.session_state.messages) <= 1:
-        st.markdown("##### ⚡ Quick Questions")
-        
-        quick_questions = [
-            ("📊 YTD Summary", "What's our total scrap cost year to date?"),
-            ("🏭 Plant Ranking", "Show the top 5 plants by scrap cost this year"),
-            ("📦 Top Defects", "What are the top 5 defect types by cost?"),
-            ("👥 Supplier Issues", "Which suppliers have the highest scrap rates?"),
-            ("📋 8D Reports", "How many 8D reports are currently open?"),
-        ]
-        
-        cols = st.columns(5)
-        for i, (label, question) in enumerate(quick_questions):
-            with cols[i]:
-                if st.button(label, key=f"quick_{label}", width='stretch'):
-                    st.session_state.pending_question = question
-                    st.session_state.messages.append({"role": "user", "content": question})
-                    st.rerun()
     
     # Get prompt from either chat input or pending question
     chat_prompt = st.chat_input("Ask about scrap data...", disabled=st.session_state.processing)
@@ -174,45 +162,90 @@ Ask me anything about your scrap data!""",
             finally:
                 st.session_state.processing = False
     
-    # Action buttons at bottom
-    col1, col2, col3 = st.columns([1, 1, 2])
+    # Action buttons
+    col1, col2 = st.columns(2)
     
     with col1:
-        if st.button("🗑️ Clear Chat", key="clear_chat_btn", width='stretch'):
+        if st.button("🗑️ Clear Chat", key="clear_chat_btn", use_container_width=True):
             st.session_state.messages = [st.session_state.messages[0]]
             st.session_state.genie_client.reset_conversation()
             st.rerun()
     
     with col2:
-        if st.button("🔄 New Conversation", key="new_convo_btn", width='stretch'):
+        if st.button("🔄 New Conversation", key="new_convo_btn", use_container_width=True):
             st.session_state.genie_client.reset_conversation()
             st.toast("Started new conversation", icon="✅")
+
+
+def render_ai_integrations():
+    """Render the AI integrations panel."""
     
-    with col3:
-        # Tips expander inline
-        with st.expander("💡 Tips for Better Results"):
-            st.markdown("""
-            **Be specific:** "Show total scrap cost by plant for 2024" ✅  
-            **Use time periods:** "this month", "last quarter", "YTD"  
-            **Ask for comparisons:** "Compare scrap rates between shifts"
-            """)
-
-
-def is_genie_connected() -> bool:
-    """Check if Genie API is configured and accessible."""
-    return genie_config.is_configured()
-
-
-def get_genie_status_html() -> str:
-    """Get HTML for Genie connection status (for sidebar)."""
-    if genie_config.is_configured():
-        return f"""
-        <div style="margin-top: 8px;">
-            <span style="color: #10b981; font-size: 0.8rem;">✅ Genie Connected</span>
-            <p style="color: #6b6b69; font-size: 0.7rem; margin: 4px 0 0 0;">
-                Space: {genie_config.space_name}
+    st.markdown("### 🔌 Genie Connection")
+    
+    # Genie status
+    genie_configured = genie_config.is_configured()
+    genie_url = f"https://{databricks_config.host}/genie/rooms/{genie_config.space_id}"
+    
+    if genie_configured:
+        st.markdown(f"""
+        <div class="glass-card" style="margin-bottom: 16px;">
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                <span style="font-size: 1.5rem;">🧞</span>
+                <h4 style="margin: 0; color: #f1f5f9;">{genie_config.space_name}</h4>
+            </div>
+            <div style="margin-bottom: 12px; padding: 8px 12px; background: #1a1a2e; border-radius: 8px;">
+                <span style="color: #10b981;">✅ API Connected</span>
+            </div>
+            <p style="color: #64748b; font-size: 0.75rem; margin: 0;">
+                Space ID: <code style="color: #a855f7;">{genie_config.space_id[:16]}...</code>
             </p>
         </div>
-        """
+        """, unsafe_allow_html=True)
+        
+        st.link_button(
+            "🔗 Open in Databricks",
+            genie_url,
+            use_container_width=True
+        )
     else:
-        return '<span style="color: #f59e0b; font-size: 0.8rem;">⚠️ Genie Not Configured</span>'
+        st.warning("Genie not configured. Set GENIE_SPACE_ID in .env")
+    
+    st.markdown("---")
+    
+    # Quick actions
+    st.markdown("### ⚡ Quick Questions")
+    
+    quick_questions = [
+        ("📊 YTD Summary", "What's our total scrap cost year to date?"),
+        ("🏭 Plant Ranking", "Show the top 5 plants by scrap cost this year"),
+        ("📦 Top Defects", "What are the top 5 defect types by cost?"),
+        ("👥 Supplier Issues", "Which suppliers have the highest scrap rates?"),
+        ("📋 8D Reports", "How many 8D reports are currently open?"),
+    ]
+    
+    for label, question in quick_questions:
+        if st.button(label, key=f"quick_{label}", use_container_width=True):
+            # Set pending question to trigger API call on rerun
+            st.session_state.pending_question = question
+            st.session_state.messages.append({"role": "user", "content": question})
+            st.rerun()
+    
+    st.markdown("---")
+    
+    # Tips
+    with st.expander("💡 Tips for Better Results"):
+        st.markdown("""
+        **Be specific with your questions:**
+        - ✅ "Show total scrap cost by plant for 2024"
+        - ❌ "Show me data"
+        
+        **Use time periods:**
+        - "this month", "last quarter", "YTD", "2024"
+        
+        **Ask for comparisons:**
+        - "Compare scrap rates between Shift 1 and Shift 2"
+        
+        **Request rankings:**
+        - "Top 10 parts by scrap cost"
+        - "Worst performing suppliers"
+        """)

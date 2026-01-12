@@ -19,11 +19,7 @@ variables:
     default: scrap_demo
   warehouse_id:
     description: SQL Warehouse ID for queries
-    default: 288a7ec183eea397
-  # Service principal for production deployments
-  service_principal_name:
-    description: Service principal for running jobs and apps
-    default: ""
+    default: 4b9b953939869799
 
 # Include resource definitions from separate files
 include:
@@ -44,21 +40,10 @@ targets:
       catalog: scrap_catalog
       schema: scrap_demo
     workspace:
-      host: https://fe-vm-industry-solutions-buildathon.cloud.databricks.com
-      profile: fe-vm-industry-solutions-buildathon
+      host: https://e2-demo-field-eng.cloud.databricks.com
+      profile: aws-ws
 
-  # Azure workspace environment
-  azure:
-    mode: development
-    variables:
-      catalog: welch
-      schema: scrap_demo
-    workspace:
-      host: https://adb-984752964297111.11.azuredatabricks.net
-      profile: azure
-      root_path: /Workspace/Users/noah.soprala@databricks.com/apps/nsoprala-scrap-demo
-
-  # Staging environment  
+  # # Staging environment  
   # staging:
   #   mode: development
   #   variables:
@@ -67,23 +52,17 @@ targets:
   #   run_as:
   #     user_name: ${workspace.current_user.userName}
 
-  # Production environment with Service Principal
+  # # Production environment
   # prod:
   #   mode: production
   #   variables:
   #     catalog: scrap_catalog_prod
   #     schema: scrap_demo_prod
-  #     service_principal_name: scrap-platform-prod-sp
-  #   
-  #   # Run jobs/apps as service principal (not user)
   #   run_as:
-  #     service_principal_name: ${var.service_principal_name}
-  #   
-  #   # Bundle-level permissions (applies to all resources)
+  #     # Update to production service principal
+  #     service_principal_name: scrap-platform-prod-sp
   #   permissions:
   #     - level: CAN_VIEW
   #       group_name: users
-  #     - level: CAN_RUN
-  #       group_name: data-engineers
   #     - level: CAN_MANAGE
-  #       service_principal_name: ${var.service_principal_name}
+  #       group_name: scrap-platform-admins
