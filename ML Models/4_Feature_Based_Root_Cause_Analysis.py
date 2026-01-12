@@ -124,13 +124,11 @@ FULL_SCHEMA = f"{CATALOG}.{SCHEMA}"
 print(f"Using catalog: {CATALOG}, schema: {SCHEMA}")
 
 # Analysis Configuration
-SAMPLE_SIZE = 50000  # For faster experimentation
 TEST_SIZE = 0.2
 RANDOM_STATE = 42
 CV_FOLDS = 5
 
 print(f"📍 Target Schema: {FULL_SCHEMA}")
-print(f"📊 Sample Size: {SAMPLE_SIZE:,}")
 
 # COMMAND ----------
 
@@ -259,9 +257,29 @@ scrap_df.printSchema()
 
 # COMMAND ----------
 
+# Determine optimal sample size based on dataset size
+total_records = scrap_df.count()
+print(f"📊 Total records available: {total_records:,}")
+
+# Dynamic sampling strategy:
+# - Use 100% if dataset <= 50k (small enough to process in full)
+# - Use 75% if dataset 50k-150k (balance speed and data volume)
+# - Use max 100k if dataset > 150k (cap for reasonable training time)
+if total_records <= 50000:
+    sample_size = total_records
+    sample_pct = 100.0
+elif total_records <= 150000:
+    sample_size = int(total_records * 0.75)
+    sample_pct = 75.0
+else:
+    sample_size = min(100000, total_records)
+    sample_pct = (sample_size / total_records) * 100
+
+print(f"📊 Using sample size: {sample_size:,} ({sample_pct:.1f}% of data)")
+
 # Convert to pandas for modeling
-pdf = scrap_df.limit(SAMPLE_SIZE).toPandas()
-print(f"📊 Working with {len(pdf):,} records")
+pdf = scrap_df.limit(sample_size).toPandas()
+print(f"✅ Loaded {len(pdf):,} records for analysis")
 
 # Define feature groups
 NUMERIC_FEATURES = [
@@ -329,7 +347,9 @@ results = []
 feature_importance_dfs = []
 
 with mlflow.start_run(run_name="feature_importance_analysis"):
-    mlflow.log_param("sample_size", SAMPLE_SIZE)
+    mlflow.log_param("total_records", total_records)
+    mlflow.log_param("sample_size", sample_size)
+    mlflow.log_param("sample_pct", sample_pct)
     mlflow.log_param("n_features", len(feature_cols))
     
     for name, model in models.items():
@@ -468,7 +488,8 @@ plt.show()
 # Prepare for Delta save
 importance_spark_df = spark.createDataFrame(avg_importance.assign(
     analysis_date=datetime.now(),
-    sample_size=SAMPLE_SIZE
+    sample_size=sample_size,
+    total_records=total_records
 ))
 
 # Save to Delta table

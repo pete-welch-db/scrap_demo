@@ -45,7 +45,8 @@ def render_sidebar() -> str:
             [
                 "🏠 Overview",
                 "📊 Executive Dashboard", 
-                "🎯 What-If Scenarios", 
+                "🎯 What-If Scenarios",
+                "🤖 ML Insights",
                 "💬 AI Assistant"
             ],
             label_visibility="collapsed"

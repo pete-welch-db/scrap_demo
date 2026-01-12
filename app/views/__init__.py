@@ -13,8 +13,8 @@ Views:
 from .landing import render_landing_page
 from .dashboard import render_dashboard_page
 from .scenarios import render_scenarios_page
+from .ml_insights import render_ml_insights_page
 from .assistant import render_assistant_page
-# from .ml_insights import render_ml_insights_page  # Commented out - moved to Dashboard tabs
 
 __all__ = [
     "render_landing_page",
