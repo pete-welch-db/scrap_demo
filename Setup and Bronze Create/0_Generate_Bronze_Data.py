@@ -64,10 +64,10 @@ FULL_SCHEMA = f"{CATALOG}.{SCHEMA}"
 print(f"Using catalog: {CATALOG}, schema: {SCHEMA}")
 
 # Data volume settings
-NUM_PARTS = 750  # Increased to support more diverse data
-NUM_SCRAP_RECORDS = 150000  # Increased for better ML model training (especially 8D effectiveness)
+NUM_PARTS = 500
+NUM_SCRAP_RECORDS = 60000
 HISTORY_YEARS = 3
-NUM_SUPPLIERS = 60  # Increased proportionally
+NUM_SUPPLIERS = 45
 NUM_PLANTS = 6
 NUM_WORK_CENTERS_PER_PLANT = 8
 NUM_EQUIPMENT_PER_WORK_CENTER = 5
@@ -80,9 +80,12 @@ START_DATE = END_DATE - timedelta(days=HISTORY_YEARS * 365)
 
 # COMMAND ----------
 
-# Create schema if not exists
-spark.sql(f"CREATE CATALOG IF NOT EXISTS {CATALOG}")
-spark.sql(f"CREATE SCHEMA IF NOT EXISTS {FULL_SCHEMA}")
+try:
+    # Create schema if not exists
+    spark.sql(f"CREATE CATALOG IF NOT EXISTS {CATALOG}")
+    spark.sql(f"CREATE SCHEMA IF NOT EXISTS {FULL_SCHEMA}")
+except:
+    pass
 
 # COMMAND ----------
 
