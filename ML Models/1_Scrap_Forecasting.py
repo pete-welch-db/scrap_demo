@@ -951,31 +951,31 @@ def train_prophet_model_with_mlflow(
         
         try:
             df_cv = cross_validation(
-                model, 
+                model,
                 initial=f'{initial_days} days',
                 period=f'{period_days} days',
                 horizon=f'{horizon_days} days',
                 parallel="processes"
             )
-            
+
             # Calculate performance metrics across all folds
             df_p = performance_metrics(df_cv)
-            
+
             # Get average metrics across all horizons
             cv_mae = df_p['mae'].mean()
             cv_mape = df_p['mape'].mean()
             cv_rmse = df_p['rmse'].mean()
-            
+
             # Get standard deviations
             cv_mae_std = df_p['mae'].std()
             cv_mape_std = df_p['mape'].std()
             cv_rmse_std = df_p['rmse'].std()
-            
+
             # Number of folds
             num_folds = df_cv['cutoff'].nunique()
-            
+
             mlflow.log_param("cv_num_folds", num_folds)
-            
+
             # ===== LOG CROSS-VALIDATION METRICS =====
             mlflow.log_metric("cv_mae_mean", cv_mae)
             mlflow.log_metric("cv_mae_std", cv_mae_std)
@@ -983,7 +983,14 @@ def train_prophet_model_with_mlflow(
             mlflow.log_metric("cv_mape_std", cv_mape_std)
             mlflow.log_metric("cv_rmse_mean", cv_rmse)
             mlflow.log_metric("cv_rmse_std", cv_rmse_std)
-            
+
+            # Set val_metrics for compatibility with later code
+            val_metrics = {
+                'mae': cv_mae,
+                'mape': cv_mape,
+                'rmse': cv_rmse
+            }
+
             print(f"   ✅ Cross-validation complete: {num_folds} folds")
             
         except Exception as e:
@@ -1125,7 +1132,7 @@ def train_prophet_model_with_mlflow(
         print(f"      RMSE: ${cv_rmse:,.2f} ± ${cv_rmse_std:,.2f}")
         print(f"\n   🔗 MLflow Run ID: {run.info.run_id}")
         
-        return model, forecast
+        return model, forecast, val_metrics
 
 # COMMAND ----------
 
@@ -1739,7 +1746,7 @@ def train_single_model_worker(
         
         # Use tuned parameters if available
         if use_tuned_params and tuned_params:
-            model, forecast = train_prophet_model_with_mlflow(
+            model, forecast, _ = train_prophet_model_with_mlflow(
                 group_data,
                 model_name=model_name,
                 changepoint_prior_scale=tuned_params.get('changepoint_prior_scale', 0.05),
@@ -1748,7 +1755,7 @@ def train_single_model_worker(
                 seasonality_mode=tuned_params.get('seasonality_mode', 'multiplicative')
             )
         else:
-            model, forecast = train_prophet_model_with_mlflow(
+            model, forecast, _ = train_prophet_model_with_mlflow(
                 group_data,
                 model_name=model_name
             )
@@ -1864,7 +1871,7 @@ def train_multi_level_forecasts_parallel(
         
         # Check minimum records
         if len(group_data) < min_records:
-            print(f"   ⚠️ Skipping {group_name}: insufficient data ({len(group_data) days, need {min_records})")
+            print(f"   ⚠️ Skipping {group_name}: insufficient data ({len(group_data)} days, need {min_records})")
             continue
         
         training_jobs.append({
@@ -2013,7 +2020,7 @@ display(tuning_results['all_results'].sort_values('mape_mean'))
 # COMMAND ----------
 
 # Train total scrap cost model with tuned hyperparameters
-total_model, total_forecast = train_prophet_model_with_mlflow(
+total_model, total_forecast, total_val_metrics = train_prophet_model_with_mlflow(
     total_cost_data,
     model_name="total_scrap_cost_forecast",
     yearly_seasonality=True,
@@ -2391,7 +2398,7 @@ def train_multi_level_forecasts(
             
             # Use tuned parameters if available
             if use_tuned_params and tuned_params:
-                model, forecast = train_prophet_model_with_mlflow(
+                model, forecast, _ = train_prophet_model_with_mlflow(
                     group_data,
                     model_name=model_name,
                     changepoint_prior_scale=tuned_params.get('changepoint_prior_scale', 0.05),
@@ -2400,7 +2407,7 @@ def train_multi_level_forecasts(
                     seasonality_mode=tuned_params.get('seasonality_mode', 'multiplicative')
                 )
             else:
-                model, forecast = train_prophet_model_with_mlflow(
+                model, forecast, _ = train_prophet_model_with_mlflow(
                     group_data,
                     model_name=model_name
                 )
@@ -2997,9 +3004,9 @@ print("=" * 80)
 
 # Get baseline metrics from cross-validation
 baseline_metrics = {
-    "mae": cv_mae,
-    "mape": cv_mape,
-    "rmse": cv_rmse
+    "mae": total_val_metrics["mae"],
+    "mape": total_val_metrics["mape"],
+    "rmse": total_val_metrics["rmse"]
 }
 
 # Use recent data (last 30 days with actuals) for drift detection
