@@ -3,12 +3,6 @@ Configuration Management
 ========================
 Centralized configuration for the Scrap Reduction Intelligence app.
 Loads settings from environment variables with sensible defaults.
-
-INTEGRATION NOTE:
-- Base: scrap_demo-main (lines 1-127)
-- ML Branch: Scrap (lines 1-115) 
-- Changes: Added environment detection (is_databricks/is_local) from main
-- Theme: Using main's light theme (will be overridden in styles.py)
 """
 
 import os
@@ -80,7 +74,6 @@ class AppConfig:
     layout: str = "wide"
 
     # Environment: "LOCAL" (local dev) or "DBX" (Databricks Apps/DAB)
-    # SOURCE: scrap_demo-main (enhancement for production deployment)
     environment: str = "LOCAL"
 
     # Data refresh interval (seconds)
@@ -100,13 +93,11 @@ class AppConfig:
         )
 
     def is_databricks(self) -> bool:
-        """Check if running in Databricks environment.
-        SOURCE: scrap_demo-main (new method)"""
+        """Check if running in Databricks environment."""
         return self.environment.upper() == "DBX"
 
     def is_local(self) -> bool:
-        """Check if running in local environment.
-        SOURCE: scrap_demo-main (new method)"""
+        """Check if running in local environment."""
         return self.environment.upper() == "LOCAL"
     
 
@@ -117,21 +108,20 @@ app_config = AppConfig.from_env()
 
 
 # Theme colors (matching CSS variables)
-# SOURCE: Will be overridden with Databricks Oat Medium light theme in styles.py
-# This dark theme kept for reference but not used
 THEME = {
-    "bg_primary": "#EEEDE9",  # Oat Medium light background
-    "bg_secondary": "white",
-    "bg_tertiary": "#f8f8f6",
-    "bg_card": "white",
-    "accent_primary": "#FF3621",  # Databricks Lava Red
-    "accent_secondary": "#1B3139",  # Databricks Navy
+    "bg_primary": "#0a0a0f",
+    "bg_secondary": "#12121a",
+    "bg_tertiary": "#1a1a2e",
+    "bg_card": "#16162a",
+    "accent_primary": "#6366f1",
+    "accent_secondary": "#8b5cf6",
     "accent_tertiary": "#a855f7",
-    "text_primary": "#1B3139",  # Dark text for light background
-    "text_secondary": "#4a4a48",
-    "text_muted": "#6b6b69",
-    "border_color": "#e0dfdc",
+    "text_primary": "#f1f5f9",
+    "text_secondary": "#94a3b8",
+    "text_muted": "#64748b",
+    "border_color": "#2d2d44",
     "success": "#10b981",
     "warning": "#f59e0b",
     "danger": "#ef4444",
 }
+

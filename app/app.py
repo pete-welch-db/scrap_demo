@@ -9,19 +9,12 @@ A Streamlit app with Databricks Oat Medium branding for:
 - AI assistant integration (Genie/multi-agent chatbots)
 
 Deployable to Databricks Apps or locally.
-
-INTEGRATION NOTE:
-- Base: scrap_demo-main (lines 1-89)
-- ML Branch: Scrap (lines 1-112) 
-- Using main's version with Landing page, no separate ML Insights page
-- ML Insights integrated into Dashboard tabs (from main)
 """
 
 import streamlit as st
 from config import app_config
 from components import apply_custom_styles, render_header, render_sidebar
-from views import render_landing_page, render_dashboard_page, render_scenarios_page, render_assistant_page
-# ML Insights integrated into dashboard tabs, not a separate page
+from views import render_landing_page, render_dashboard_page, render_scenarios_page, render_ml_insights_page, render_assistant_page
 
 
 # =============================================================================
@@ -63,6 +56,9 @@ elif selected_page == "📊 Executive Dashboard":
 
 elif selected_page == "🎯 What-If Scenarios":
     render_scenarios_page()
+
+elif selected_page == "🤖 ML Insights":
+    render_ml_insights_page()
 
 elif selected_page == "💬 AI Assistant":
     render_assistant_page()
