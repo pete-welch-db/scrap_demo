@@ -123,7 +123,7 @@ FORECAST_DAYS = 90  # 3 months forward
 TRAIN_TEST_SPLIT_DAYS = 30  # Hold out last 30 days for validation
 
 # Parallel Training Configuration
-MAX_PARALLEL_WORKERS = 4  # Number of models to train in parallel
+MAX_PARALLEL_WORKERS = 8  # Number of models to train in parallel (increased from 4)
 USE_PARALLEL_TRAINING = True  # Enable/disable parallel training
 
 # MLOps Configuration
@@ -131,6 +131,27 @@ DRIFT_DETECTION_WINDOW = 30  # Days to compare for drift detection
 DRIFT_P_VALUE_THRESHOLD = 0.05  # Significance threshold for statistical tests
 DRIFT_DISTANCE_THRESHOLD = 0.1  # Threshold for Wasserstein distance
 MODEL_PERFORMANCE_DEGRADATION_THRESHOLD = 0.15  # 15% increase in error triggers alert
+
+# ============================================================================
+# PERFORMANCE OPTIMIZATION FLAGS
+# ============================================================================
+# Toggle these to control runtime vs. thoroughness trade-off
+# DEFAULTS: Set to fastest mode (15-20 min runtime)
+# For production validation: Set ENABLE_MODEL_CV=True, TRAIN_SUPPLIER/PART_MODELS=True
+
+SKIP_HYPERPARAMETER_TUNING = True   # Use pre-tuned params (saves ~2.4 hrs) - DEFAULT: True
+ENABLE_MODEL_CV = False              # Skip CV during training (saves ~30 min) - DEFAULT: False
+TRAIN_SUPPLIER_MODELS = False        # Skip supplier models (saves ~15 min) - DEFAULT: False
+TRAIN_PART_MODELS = False            # Skip part models (saves ~25 min) - DEFAULT: False
+
+# Pre-tuned hyperparameters (from grid search results)
+# Use these when SKIP_HYPERPARAMETER_TUNING=True
+PRETRAINED_PARAMS = {
+    'changepoint_prior_scale': 0.05,
+    'seasonality_prior_scale': 10.0,
+    'holidays_prior_scale': 10.0,
+    'seasonality_mode': 'multiplicative'
+}
 
 # MLflow Configuration
 # MLflow will use the default notebook experiment when running from Git folders
@@ -861,7 +882,8 @@ def train_prophet_model_with_mlflow(
     seasonality_mode: str = 'multiplicative',
     changepoint_prior_scale: float = 0.05,
     seasonality_prior_scale: float = 10.0,
-    holidays_prior_scale: float = 10.0
+    holidays_prior_scale: float = 10.0,
+    enable_cv: bool = None  # None means use global ENABLE_MODEL_CV flag
 ) -> tuple:
     """
     Train a Prophet model with time series cross-validation and comprehensive MLflow logging.
@@ -933,33 +955,37 @@ def train_prophet_model_with_mlflow(
         model.fit(train_data)
         
         # ===== TIME SERIES CROSS-VALIDATION =====
-        # Prophet's cross_validation uses expanding windows
-        # initial: minimum training period
-        # period: spacing between cutoff dates
-        # horizon: forecast horizon for each fold
-        print("   🔄 Running time series cross-validation...")
+        # Check if CV is enabled (use parameter if provided, otherwise use global flag)
+        run_cv = enable_cv if enable_cv is not None else ENABLE_MODEL_CV
         
-        # Calculate CV parameters based on data length
-        data_days = (train_data['ds'].max() - train_data['ds'].min()).days
-        initial_days = max(180, int(data_days * 0.5))  # At least 180 days or 50% of data
-        period_days = 30  # Validate every 30 days
-        horizon_days = min(forecast_days, 90)  # Validate up to 90 days out
-        
-        mlflow.log_param("cv_initial_days", initial_days)
-        mlflow.log_param("cv_period_days", period_days)
-        mlflow.log_param("cv_horizon_days", horizon_days)
-        
-        try:
-            df_cv = cross_validation(
-                model,
-                initial=f'{initial_days} days',
-                period=f'{period_days} days',
-                horizon=f'{horizon_days} days',
-                parallel="processes"
-            )
+        if run_cv:
+            # Prophet's cross_validation uses expanding windows
+            # initial: minimum training period
+            # period: spacing between cutoff dates
+            # horizon: forecast horizon for each fold
+            print("   🔄 Running time series cross-validation...")
+            
+            # Calculate CV parameters based on data length
+            data_days = (train_data['ds'].max() - train_data['ds'].min()).days
+            initial_days = max(180, int(data_days * 0.5))  # At least 180 days or 50% of data
+            period_days = 30  # Validate every 30 days
+            horizon_days = min(forecast_days, 90)  # Validate up to 90 days out
+            
+            mlflow.log_param("cv_initial_days", initial_days)
+            mlflow.log_param("cv_period_days", period_days)
+            mlflow.log_param("cv_horizon_days", horizon_days)
+            
+            try:
+                df_cv = cross_validation(
+                    model,
+                    initial=f'{initial_days} days',
+                    period=f'{period_days} days',
+                    horizon=f'{horizon_days} days',
+                    parallel="processes"
+                )
 
-            # Calculate performance metrics across all folds
-            df_p = performance_metrics(df_cv)
+                # Calculate performance metrics across all folds
+                df_p = performance_metrics(df_cv)
 
             # Get average metrics across all horizons
             cv_mae = df_p['mae'].mean()
@@ -1036,6 +1062,20 @@ def train_prophet_model_with_mlflow(
             mlflow.log_metric("cv_mae_mean", cv_mae)
             mlflow.log_metric("cv_mape_mean", cv_mape)
             mlflow.log_metric("cv_rmse_mean", cv_rmse)
+        
+        else:
+            # CV is disabled - skip validation entirely
+            print("   ⚡ Skipping cross-validation (ENABLE_MODEL_CV=False)")
+            cv_mae = None
+            cv_mape = None
+            cv_rmse = None
+            cv_mae_std = 0
+            cv_mape_std = 0
+            cv_rmse_std = 0
+            num_folds = 0
+            
+            mlflow.log_param("cv_enabled", False)
+            mlflow.log_param("cv_num_folds", 0)
         
         # ===== MAKE FUTURE PREDICTIONS =====
         # Use the model trained on full data for final forecast
@@ -1982,33 +2022,50 @@ total_cost_data.head(10)
 
 # Tune hyperparameters on total scrap data
 # Using a smaller grid for faster execution - expand for production
-tuning_param_grid = {
-    'changepoint_prior_scale': [0.01, 0.05, 0.1],  # Trend flexibility
-    'seasonality_prior_scale': [1.0, 10.0],        # Seasonality strength
-    'holidays_prior_scale': [1.0, 10.0],           # Holiday effect
-    'seasonality_mode': ['multiplicative']         # Based on data characteristics
-}
 
-# Calculate CV parameters
-data_days = (total_cost_data['ds'].max() - total_cost_data['ds'].min()).days
-cv_initial_days = max(365, int(data_days * 0.6))
+if SKIP_HYPERPARAMETER_TUNING:
+    print("\n" + "="*80)
+    print("⚡ PERFORMANCE MODE: Using pre-tuned hyperparameters")
+    print("   Skipping expensive grid search (saves ~2-3 hours)")
+    print("="*80)
+    best_params = PRETRAINED_PARAMS
+    print(f"\n📊 Using Parameters:")
+    for key, value in best_params.items():
+        print(f"   {key}: {value}")
+    print()
+else:
+    print("\n" + "="*80)
+    print("🔍 RUNNING HYPERPARAMETER TUNING")
+    print("   This will take 2-3 hours...")
+    print("="*80)
+    
+    tuning_param_grid = {
+        'changepoint_prior_scale': [0.01, 0.05, 0.1],  # Trend flexibility
+        'seasonality_prior_scale': [1.0, 10.0],        # Seasonality strength
+        'holidays_prior_scale': [1.0, 10.0],           # Holiday effect
+        'seasonality_mode': ['multiplicative']         # Based on data characteristics
+    }
 
-tuning_results = tune_prophet_hyperparameters(
-    total_cost_data,
-    param_grid=tuning_param_grid,
-    metric='mape',  # Optimize for MAPE
-    cv_horizon=f'{FORECAST_DAYS} days',
-    cv_initial=f'{cv_initial_days} days',
-    cv_period='30 days'
-)
+    # Calculate CV parameters
+    data_days = (total_cost_data['ds'].max() - total_cost_data['ds'].min()).days
+    cv_initial_days = max(365, int(data_days * 0.6))
 
-# Extract best parameters
-best_params = tuning_results['best_params']
+    tuning_results = tune_prophet_hyperparameters(
+        total_cost_data,
+        param_grid=tuning_param_grid,
+        metric='mape',  # Optimize for MAPE
+        cv_horizon=f'{FORECAST_DAYS} days',
+        cv_initial=f'{cv_initial_days} days',
+        cv_period='30 days'
+    )
 
-print("\n📊 Tuning Results Summary:")
-print(f"   Best MAPE: {tuning_results['best_score']:.2f}%")
-print("\n   All Results:")
-display(tuning_results['all_results'].sort_values('mape_mean'))
+    # Extract best parameters
+    best_params = tuning_results['best_params']
+
+    print("\n📊 Tuning Results Summary:")
+    print(f"   Best MAPE: {tuning_results['best_score']:.2f}%")
+    print("\n   All Results:")
+    display(tuning_results['all_results'].sort_values('mape_mean'))
 
 # COMMAND ----------
 
@@ -2526,31 +2583,42 @@ plt.show()
 # COMMAND ----------
 
 # Train supplier-level forecasts (top 10 suppliers by scrap volume) (PARALLEL)
-if USE_PARALLEL_TRAINING:
-    supplier_models = train_multi_level_forecasts_parallel(
-        scrap_df,
-        date_col="transaction_date",
-        value_col="total_scrap_cost",
-        group_col="supplier_id",
-        group_name_col="supplier_name_lookup",
-        model_prefix="supplier_forecast",
-        top_n=10,
-        use_tuned_params=True,
-        tuned_params=best_params,
-        max_workers=MAX_PARALLEL_WORKERS
-    )
+if TRAIN_SUPPLIER_MODELS:
+    print("\n" + "="*80)
+    print("📦 Training Supplier-Level Models (Top 10)")
+    print("="*80)
+    
+    if USE_PARALLEL_TRAINING:
+        supplier_models = train_multi_level_forecasts_parallel(
+            scrap_df,
+            date_col="transaction_date",
+            value_col="total_scrap_cost",
+            group_col="supplier_id",
+            group_name_col="supplier_name_lookup",
+            model_prefix="supplier_forecast",
+            top_n=10,
+            use_tuned_params=True,
+            tuned_params=best_params,
+            max_workers=MAX_PARALLEL_WORKERS
+        )
+    else:
+        supplier_models = train_multi_level_forecasts(
+            scrap_df,
+            date_col="transaction_date",
+            value_col="total_scrap_cost",
+            group_col="supplier_id",
+            group_name_col="supplier_name_lookup",
+            model_prefix="supplier_forecast",
+            top_n=10,
+            use_tuned_params=True,
+            tuned_params=best_params
+        )
 else:
-    supplier_models = train_multi_level_forecasts(
-        scrap_df,
-        date_col="transaction_date",
-        value_col="total_scrap_cost",
-        group_col="supplier_id",
-        group_name_col="supplier_name_lookup",
-        model_prefix="supplier_forecast",
-        top_n=10,
-        use_tuned_params=True,
-        tuned_params=best_params
-    )
+    print("\n" + "="*80)
+    print("⚡ SKIPPING Supplier-Level Models (TRAIN_SUPPLIER_MODELS=False)")
+    print("   Saves ~15 minutes")
+    print("="*80)
+    supplier_models = {}
 
 # COMMAND ----------
 
@@ -2596,33 +2664,44 @@ plt.show()
 # COMMAND ----------
 
 # Train part-level forecasts (top 20 parts by scrap volume) (PARALLEL)
-if USE_PARALLEL_TRAINING:
-    part_models = train_multi_level_forecasts_parallel(
-        scrap_df,
-        date_col="transaction_date",
-        value_col="total_scrap_cost",
-        group_col="part_id",
-        group_name_col="part_name_lookup",
-        model_prefix="part_forecast",
-        top_n=20,
-        min_records=30,  # Lower threshold for parts
-        use_tuned_params=True,
-        tuned_params=best_params,
-        max_workers=MAX_PARALLEL_WORKERS
-    )
+if TRAIN_PART_MODELS:
+    print("\n" + "="*80)
+    print("🔩 Training Part-Level Models (Top 20)")
+    print("="*80)
+    
+    if USE_PARALLEL_TRAINING:
+        part_models = train_multi_level_forecasts_parallel(
+            scrap_df,
+            date_col="transaction_date",
+            value_col="total_scrap_cost",
+            group_col="part_id",
+            group_name_col="part_name_lookup",
+            model_prefix="part_forecast",
+            top_n=20,
+            min_records=30,  # Lower threshold for parts
+            use_tuned_params=True,
+            tuned_params=best_params,
+            max_workers=MAX_PARALLEL_WORKERS
+        )
+    else:
+        part_models = train_multi_level_forecasts(
+            scrap_df,
+            date_col="transaction_date",
+            value_col="total_scrap_cost",
+            group_col="part_id",
+            group_name_col="part_name_lookup",
+            model_prefix="part_forecast",
+            top_n=20,
+            min_records=30,  # Lower threshold for parts
+            use_tuned_params=True,
+            tuned_params=best_params
+        )
 else:
-    part_models = train_multi_level_forecasts(
-        scrap_df,
-        date_col="transaction_date",
-        value_col="total_scrap_cost",
-        group_col="part_id",
-        group_name_col="part_name_lookup",
-        model_prefix="part_forecast",
-        top_n=20,
-        min_records=30,  # Lower threshold for parts
-        use_tuned_params=True,
-        tuned_params=best_params
-    )
+    print("\n" + "="*80)
+    print("⚡ SKIPPING Part-Level Models (TRAIN_PART_MODELS=False)")
+    print("   Saves ~25 minutes")
+    print("="*80)
+    part_models = {}
 
 # COMMAND ----------
 
