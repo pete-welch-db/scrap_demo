@@ -24,6 +24,13 @@ resources:
         team: data-engineering
         stage: setup
       
+      # Job permissions
+      permissions:
+        - level: CAN_MANAGE
+          user_name: ${workspace.current_user.userName}
+        - level: CAN_MANAGE
+          user_name: noah.soprala@databricks.com
+      
       # Define serverless environment
       environments:
         - environment_key: default
@@ -64,6 +71,13 @@ resources:
         project: scrap-reduction
         team: platform
         stage: pipeline
+      
+      # Job permissions
+      permissions:
+        - level: CAN_MANAGE
+          user_name: ${workspace.current_user.userName}
+        - level: CAN_MANAGE
+          user_name: noah.soprala@databricks.com
       
       # Define serverless environment for ML tasks
       environments:

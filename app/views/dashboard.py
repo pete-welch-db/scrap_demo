@@ -506,7 +506,7 @@ def render_dashboard_page():
                 st.metric("Uncertainty Range", f"±${uncertainty/2:,.0f}")
         
         # Forecast chart
-        st.plotly_chart(plot_forecast(forecast_df), width='stretch', key="forecast_chart")
+        st.plotly_chart(plot_forecast(forecast_df), use_container_width=True, key="forecast_chart")
     
     # =========================================================================
     # TAB 3: SUPPLIER RISK
@@ -546,7 +546,7 @@ def render_dashboard_page():
         
         with chart_col:
             st.markdown("##### Risk Distribution")
-            st.plotly_chart(plot_supplier_risk_pie(risk_df), width='stretch', key="risk_pie_chart")
+            st.plotly_chart(plot_supplier_risk_pie(risk_df), use_container_width=True, key="risk_pie_chart")
         
         with detail_col:
             st.markdown("##### Drill Down by Category")
@@ -571,7 +571,7 @@ def render_dashboard_page():
                 display_df['quality_score'] = display_df['quality_score'].apply(lambda x: f"{x:.1%}")
                 display_df['delivery_score'] = display_df['delivery_score'].apply(lambda x: f"{x:.1%}")
                 display_df.columns = ['Supplier', 'Tier', 'Quality', 'Delivery', 'Risk', 'Action']
-                st.dataframe(display_df, width='stretch', hide_index=True, height=250)
+                st.dataframe(display_df, use_container_width=True, hide_index=True, height=250)
             else:
                 st.info(f"No {selected_category.lower()} risk suppliers found.")
     
@@ -650,7 +650,7 @@ def render_dashboard_page():
             ),
             showlegend=False
         )
-        st.plotly_chart(fig, width='stretch', key="anomaly_chart")
+        st.plotly_chart(fig, use_container_width=True, key="anomaly_chart")
         
         # Anomaly table
         with st.expander("📋 Anomaly Details"):
@@ -661,7 +661,7 @@ def render_dashboard_page():
             display_df['total_scrap_cost'] = display_df['total_scrap_cost'].apply(lambda x: f"${x:,.0f}")
             display_df['anomaly_score'] = display_df['anomaly_score'].apply(lambda x: f"{x:.2f}")
             display_df.columns = ['Date', 'Plant', 'Scrap Cost', 'Qty', 'Score', 'Reason']
-            st.dataframe(display_df, width='stretch', hide_index=True)
+            st.dataframe(display_df, use_container_width=True, hide_index=True)
     
     # =========================================================================
     # TAB 5: ROOT CAUSE VALIDATION
@@ -741,7 +741,7 @@ def render_dashboard_page():
                 ),
                 showlegend=False
             )
-            st.plotly_chart(fig, width='stretch', key="root_cause_chart")
+            st.plotly_chart(fig, use_container_width=True, key="root_cause_chart")
         
         # Cases to review
         with st.expander("🔍 Cases to Review (High-Confidence Disagreements)"):
@@ -753,6 +753,6 @@ def render_dashboard_page():
                 review_display['prediction_confidence'] = review_display['prediction_confidence'].apply(lambda x: f"{x:.1%}")
                 review_display['total_scrap_cost'] = review_display['total_scrap_cost'].apply(lambda x: f"${x:,.0f}")
                 review_display.columns = ['Defect', 'Actual Root Cause', 'ML Prediction', 'Confidence', 'Cost']
-                st.dataframe(review_display, width='stretch', hide_index=True)
+                st.dataframe(review_display, use_container_width=True, hide_index=True)
             else:
                 st.info("No high-confidence disagreements found.")

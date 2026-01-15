@@ -52,4 +52,11 @@ resources:
         spark.databricks.delta.preview.enabled: "true"
         spark.databricks.delta.optimizeWrite.enabled: "true"
         spark.databricks.delta.autoCompact.enabled: "true"
+      
+      # Pipeline permissions
+      permissions:
+        - level: CAN_MANAGE
+          user_name: ${workspace.current_user.userName}
+        - level: CAN_MANAGE
+          user_name: noah.soprala@databricks.com
 
