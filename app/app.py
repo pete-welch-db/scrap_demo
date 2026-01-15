@@ -14,7 +14,8 @@ Deployable to Databricks Apps or locally.
 import streamlit as st
 from config import app_config
 from components import apply_custom_styles, render_header, render_sidebar
-from views import render_landing_page, render_dashboard_page, render_scenarios_page, render_ml_insights_page, render_assistant_page
+from views import render_landing_page, render_dashboard_page, render_scenarios_page, render_assistant_page
+# from views import render_ml_insights_page  # Commented out - moved to Scrap Insights tabs
 
 
 # =============================================================================
@@ -51,14 +52,15 @@ selected_page = render_sidebar()
 if selected_page == "🏠 Overview":
     render_landing_page()
 
-elif selected_page == "📊 Executive Dashboard":
+elif selected_page == "📊 Scrap Insights":
     render_dashboard_page()
 
 elif selected_page == "🎯 What-If Scenarios":
     render_scenarios_page()
 
-elif selected_page == "🤖 ML Insights":
-    render_ml_insights_page()
+# ML Insights tab removed - content moved to Scrap Insights tabs
+# elif selected_page == "🤖 ML Insights":
+#     render_ml_insights_page()
 
 elif selected_page == "💬 AI Assistant":
     render_assistant_page()

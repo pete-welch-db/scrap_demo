@@ -567,6 +567,6 @@ def render_landing_page():
             font-size: 1rem;
             margin: 0;
             font-family: 'DM Sans', sans-serif;
-        ">Use the sidebar to explore the Executive Dashboard, What-If Scenarios, and AI Assistant.</p>
+        ">Use the sidebar to explore Scrap Insights, What-If Scenarios, and AI Assistant.</p>
     </div>
     """, unsafe_allow_html=True)

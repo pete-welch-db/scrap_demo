@@ -44,9 +44,9 @@ def render_sidebar() -> str:
             "Navigation",
             [
                 "🏠 Overview",
-                "📊 Executive Dashboard", 
+                "📊 Scrap Insights", 
                 "🎯 What-If Scenarios",
-                "🤖 ML Insights",
+                # "🤖 ML Insights",  # Removed - content moved to Scrap Insights tabs
                 "💬 AI Assistant"
             ],
             label_visibility="collapsed"
@@ -97,7 +97,7 @@ def render_sidebar() -> str:
             st.markdown("---")
             
             # Refresh button
-            if st.button("🔄 Refresh", use_container_width=True):
+            if st.button("🔄 Refresh", width='stretch'):
                 st.cache_data.clear()
                 st.rerun()
         

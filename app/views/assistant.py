@@ -46,7 +46,7 @@ def format_genie_response(response: GenieResponse) -> None:
         st.markdown("---")
         st.markdown("**💡 Suggested follow-ups:**")
         for q in response.suggested_questions:
-            if st.button(f"→ {q}", key=f"suggest_{hash(q)}", use_container_width=True):
+            if st.button(f"→ {q}", key=f"suggest_{hash(q)}", width='stretch'):
                 st.session_state.pending_question = q
                 st.session_state.messages.append({"role": "user", "content": q})
                 st.rerun()
@@ -113,7 +113,7 @@ Ask me anything about your scrap data!""",
         cols = st.columns(5)
         for i, (label, question) in enumerate(quick_questions):
             with cols[i]:
-                if st.button(label, key=f"quick_{label}", use_container_width=True):
+                if st.button(label, key=f"quick_{label}", width='stretch'):
                     st.session_state.pending_question = question
                     st.session_state.messages.append({"role": "user", "content": question})
                     st.rerun()
@@ -178,13 +178,13 @@ Ask me anything about your scrap data!""",
     col1, col2, col3 = st.columns([1, 1, 2])
     
     with col1:
-        if st.button("🗑️ Clear Chat", key="clear_chat_btn", use_container_width=True):
+        if st.button("🗑️ Clear Chat", key="clear_chat_btn", width='stretch'):
             st.session_state.messages = [st.session_state.messages[0]]
             st.session_state.genie_client.reset_conversation()
             st.rerun()
     
     with col2:
-        if st.button("🔄 New Conversation", key="new_convo_btn", use_container_width=True):
+        if st.button("🔄 New Conversation", key="new_convo_btn", width='stretch'):
             st.session_state.genie_client.reset_conversation()
             st.toast("Started new conversation", icon="✅")
     

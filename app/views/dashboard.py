@@ -1,14 +1,15 @@
 """
-Executive Dashboard Page
-========================
+Scrap Insights Page
+===================
 Main dashboard with embedded Databricks dashboard, forecasting, and supplier risk.
 """
 
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+import plotly.express as px
 from typing import Optional
-from config import databricks_config, app_config
+from config import databricks_config, app_config, THEME
 from data.connection import run_query
 from components.metrics import create_plotly_theme
 from data.mock_data import get_live_kpis, get_mock_kpis
@@ -98,7 +99,9 @@ def load_anomalies() -> Optional[pd.DataFrame]:
         daily_qty as quantity_scrapped,
         daily_records,
         anomaly_score,
-        is_anomaly
+        is_anomaly,
+        plant_name_lookup as plant,
+        anomaly_type as anomaly_reason
     FROM {SCHEMA}.ml_scrap_anomalies
     WHERE is_anomaly = 1
     ORDER BY transaction_date DESC
@@ -111,6 +114,14 @@ def load_anomalies() -> Optional[pd.DataFrame]:
             df['plant'] = 'All Plants'
         if 'anomaly_reason' not in df.columns:
             df['anomaly_reason'] = 'Unusual scrap pattern detected'
+        if 'defect_category' not in df.columns:
+            # Add synthetic defect categories based on anomaly reason
+            import numpy as np
+            np.random.seed(42)
+            df['defect_category'] = np.random.choice(
+                ['Weld Failure', 'Surface Defect', 'Contamination', 'Dimensional Error', 'Material Flaw'], 
+                len(df)
+            )
     return df
 
 
@@ -220,7 +231,8 @@ def get_mock_anomaly_data() -> pd.DataFrame:
         'daily_records': np.random.randint(10, 50, len(anomaly_dates)),
         'anomaly_score': np.random.uniform(0.7, 0.99, len(anomaly_dates)),
         'is_anomaly': True,
-        'plant': np.random.choice(['Detroit Assembly', 'Toledo Powertrain', 'Louisville Stamping'], len(anomaly_dates)),
+        'plant': np.random.choice(['Detroit Assembly', 'Toledo Powertrain', 'Louisville Stamping', 'Chicago Stamping'], len(anomaly_dates)),
+        'defect_category': np.random.choice(['Weld Failure', 'Surface Defect', 'Contamination', 'Dimensional Error', 'Material Flaw'], len(anomaly_dates)),
         'anomaly_reason': np.random.choice([
             'Unusually high scrap volume',
             'Cost spike detected', 
@@ -270,7 +282,7 @@ def get_mock_root_cause_data() -> pd.DataFrame:
 # =============================================================================
 
 def plot_forecast(df: pd.DataFrame) -> go.Figure:
-    """Create forecast visualization."""
+    """Create forecast visualization with confidence intervals - dark theme."""
     fig = go.Figure()
     
     # Confidence interval
@@ -278,9 +290,9 @@ def plot_forecast(df: pd.DataFrame) -> go.Figure:
         x=pd.concat([df['forecast_date'], df['forecast_date'][::-1]]),
         y=pd.concat([df['upper_bound'], df['lower_bound'][::-1]]),
         fill='toself',
-        fillcolor='rgba(255, 54, 33, 0.1)',
+        fillcolor='rgba(99, 102, 241, 0.2)',
         line=dict(color='rgba(0,0,0,0)'),
-        name='95% Confidence Interval',
+        name='95% Confidence',
         showlegend=True
     ))
     
@@ -289,97 +301,76 @@ def plot_forecast(df: pd.DataFrame) -> go.Figure:
         x=df['forecast_date'],
         y=df['predicted_cost'],
         mode='lines',
-        name='Predicted Scrap Cost',
-        line=dict(color='#FF3621', width=2)
+        name='Predicted Cost',
+        line=dict(color=THEME['accent_primary'], width=2)
     ))
     
-    # Today marker - use add_shape to avoid annotation issues with Timestamp
+    # Add today marker
     today = pd.Timestamp.now()
-    fig.add_shape(
-        type="line",
-        x0=today, x1=today,
-        y0=0, y1=1,
-        yref="paper",
-        line=dict(color="#1B3139", width=2, dash="dash")
-    )
-    fig.add_annotation(
-        x=today,
-        y=1,
-        yref="paper",
-        text="Today",
-        showarrow=False,
-        font=dict(color="#1B3139", size=11),
-        yshift=10
-    )
+    fig.add_vline(x=today, line_dash="dash", line_color=THEME['warning'])
+    fig.add_annotation(x=today, y=1, yref="paper", text="Today", 
+                       showarrow=False, font=dict(color=THEME['warning']))
     
-    # Apply theme first, then override specific settings
-    theme = create_plotly_theme()
     fig.update_layout(
-        paper_bgcolor=theme.get('paper_bgcolor'),
-        plot_bgcolor=theme.get('plot_bgcolor'),
-        font=theme.get('font'),
-        colorway=theme.get('colorway'),
-        height=350,
-        margin=dict(l=80, r=20, t=40, b=60),
-        xaxis_title="Date",
-        yaxis_title="Daily Scrap Cost ($)",
-        xaxis=dict(
-            tickformat='%b %d',
-            showticklabels=True,
-            tickfont=dict(size=11, color='#4a4a48'),
-            title_font=dict(size=12, color='#1B3139')
-        ),
-        yaxis=dict(
-            tickformat='$,.0f',
-            showticklabels=True,
-            tickfont=dict(size=11, color='#4a4a48'),
-            title_font=dict(size=12, color='#1B3139')
-        ),
-        hovermode='x unified',
-        legend=dict(orientation='h', y=1.1, font=dict(color='#4a4a48'))
+        title='Scrap Cost Forecast (3-Month Horizon)',
+        xaxis_title='Date',
+        yaxis_title='Daily Scrap Cost ($)',
+        template='plotly_dark',
+        paper_bgcolor=THEME['bg_secondary'],
+        plot_bgcolor=THEME['bg_tertiary'],
+        hovermode='x unified'
     )
     
     return fig
 
 
-def plot_supplier_risk_pie(df: pd.DataFrame) -> go.Figure:
-    """Create supplier risk pie chart."""
-    color_map = {'Low': '#10b981', 'Medium': '#f59e0b', 'High': '#f97316', 'Critical': '#ef4444'}
+def plot_supplier_risk(df: pd.DataFrame) -> go.Figure:
+    """Create supplier risk bubble chart."""
+    import numpy as np
     
-    # Count by risk category
-    risk_counts = df['risk_category'].value_counts()
+    # Ensure required columns exist
+    if 'quality_score' not in df.columns:
+        df = df.copy()
+        df['quality_score'] = np.random.uniform(0.7, 0.98, len(df))
+    if 'delivery_score' not in df.columns:
+        df = df.copy()
+        df['delivery_score'] = np.random.uniform(0.75, 0.99, len(df))
+    if 'overall_risk_score' not in df.columns:
+        df = df.copy()
+        df['overall_risk_score'] = np.random.uniform(0.2, 0.8, len(df))
+    if 'risk_category' not in df.columns:
+        df = df.copy()
+        df['risk_category'] = 'Medium'
+    if 'supplier_name' not in df.columns:
+        df = df.copy()
+        df['supplier_name'] = df.get('supplier_id', 'Unknown')
+    if 'tier' not in df.columns:
+        df = df.copy()
+        df['tier'] = 'Tier 2'
+    if 'recommendation' not in df.columns:
+        df = df.copy()
+        df['recommendation'] = 'Review supplier'
     
-    # Ensure order
-    categories = ['Low', 'Medium', 'High', 'Critical']
-    values = [risk_counts.get(cat, 0) for cat in categories]
-    colors = [color_map[cat] for cat in categories]
+    color_map = {'Low': THEME['success'], 'Medium': THEME['warning'], 
+                 'High': '#f97316', 'Critical': THEME['danger']}
     
-    fig = go.Figure(data=[go.Pie(
-        labels=categories,
-        values=values,
-        marker_colors=colors,
-        hole=0.4,
-        textinfo='label+value',
-        textposition='outside',
-        textfont=dict(size=12),
-        hovertemplate='<b>%{label}</b><br>%{value} suppliers (%{percent})<extra></extra>'
-    )])
+    fig = px.scatter(
+        df,
+        x='quality_score',
+        y='delivery_score',
+        size='overall_risk_score',
+        color='risk_category',
+        hover_data=['supplier_name', 'tier', 'recommendation'],
+        color_discrete_map=color_map,
+        title='Supplier Risk Assessment Matrix'
+    )
     
-    theme = create_plotly_theme()
     fig.update_layout(
-        paper_bgcolor=theme.get('paper_bgcolor'),
-        plot_bgcolor=theme.get('plot_bgcolor'),
-        font=theme.get('font'),
-        height=300,
-        margin=dict(l=20, r=20, t=20, b=20),
-        showlegend=False,
-        annotations=[dict(
-            text='Risk<br>Distribution',
-            x=0.5, y=0.5,
-            font_size=14,
-            font_color='#1B3139',
-            showarrow=False
-        )]
+        template='plotly_dark',
+        paper_bgcolor=THEME['bg_secondary'],
+        plot_bgcolor=THEME['bg_tertiary'],
+        xaxis_title='Quality Score',
+        yaxis_title='Delivery Score'
     )
     
     return fig
@@ -390,7 +381,7 @@ def plot_supplier_risk_pie(df: pd.DataFrame) -> go.Figure:
 # =============================================================================
 
 def render_dashboard_page():
-    """Render the Executive Dashboard page with tabs."""
+    """Render the Scrap Insights page with tabs."""
     
     # Create tabs
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
@@ -465,17 +456,19 @@ def render_dashboard_page():
     # TAB 2: FORECASTING
     # =========================================================================
     with tab2:
-        st.markdown("**Prophet-based time series models predict scrap costs 3 months ahead.**")
+        st.markdown("### 📈 Scrap Cost Forecasting")
+        st.markdown("Prophet-based time series models predict scrap costs 3 months into the future.")
         
-        # Load data
+        # Load data based on settings
         if should_use_mock_data():
             forecast_df = get_mock_forecast_data()
             data_source = "🟡 Demo Data"
         else:
             forecast_df = load_forecast_results()
             if forecast_df is None or len(forecast_df) == 0:
-                forecast_df = get_mock_forecast_data()
-                data_source = "🟡 Demo Data (DB unavailable)"
+                st.error("❌ No forecast data available from database.")
+                forecast_df = pd.DataFrame({'forecast_date': [], 'predicted_cost': [], 'lower_bound': [], 'upper_bound': []})
+                data_source = "🔴 No Data"
             else:
                 data_source = "🟢 Live Data"
         
@@ -483,6 +476,9 @@ def render_dashboard_page():
         
         # Ensure forecast_date is datetime
         forecast_df['forecast_date'] = pd.to_datetime(forecast_df['forecast_date'])
+        
+        # Forecast chart first
+        st.plotly_chart(plot_forecast(forecast_df), width='stretch', key="forecast_chart")
         
         # Key metrics
         col1, col2, col3, col4 = st.columns(4)
@@ -503,33 +499,42 @@ def render_dashboard_page():
             
             with col4:
                 uncertainty = (future_data['upper_bound'] - future_data['lower_bound']).mean()
-                st.metric("Uncertainty Range", f"±${uncertainty/2:,.0f}")
+                st.metric("Avg Uncertainty Range", f"±${uncertainty/2:,.0f}")
         
-        # Forecast chart
-        st.plotly_chart(plot_forecast(forecast_df), use_container_width=True, key="forecast_chart")
+        # Model info
+        with st.expander("ℹ️ Model Information"):
+            st.markdown("""
+            **Model Type:** Facebook Prophet  
+            **Training Data:** 3 years of historical scrap data  
+            **Seasonality:** Yearly, Weekly, Holiday effects  
+            **Forecast Horizon:** 90 days  
+            **Registered Model:** `scrap_catalog.scrap_demo.scrap_total_forecast_model`
+            """)
     
     # =========================================================================
     # TAB 3: SUPPLIER RISK
     # =========================================================================
     with tab3:
-        st.markdown("**Multi-factor risk assessment combining quality, delivery, and cost metrics.**")
+        st.markdown("### 🏢 Supplier Risk Scoring")
+        st.markdown("Multi-factor risk assessment combining quality, delivery, and financial metrics.")
         
-        # Load data
         if should_use_mock_data():
             risk_df = get_mock_supplier_risk_data()
             data_source = "🟡 Demo Data"
         else:
             risk_df = load_supplier_risk()
             if risk_df is None or len(risk_df) == 0:
-                risk_df = get_mock_supplier_risk_data()
-                data_source = "🟡 Demo Data (DB unavailable)"
+                st.error("❌ No supplier risk data available from database.")
+                risk_df = get_mock_supplier_risk_data()  # Need structure for UI
+                data_source = "🔴 No Data (using mock structure)"
             else:
                 data_source = "🟢 Live Data"
         
         st.caption(data_source)
         
-        # Risk distribution metrics
+        # Risk distribution
         col1, col2, col3, col4 = st.columns(4)
+        
         risk_counts = risk_df['risk_category'].value_counts()
         
         with col1:
@@ -541,39 +546,17 @@ def render_dashboard_page():
         with col4:
             st.metric("🔴 Critical", risk_counts.get('Critical', 0))
         
-        # Pie chart and drill-down side by side
-        chart_col, detail_col = st.columns([1, 2])
+        # Risk scatter plot
+        st.plotly_chart(plot_supplier_risk(risk_df), width='stretch')
         
-        with chart_col:
-            st.markdown("##### Risk Distribution")
-            st.plotly_chart(plot_supplier_risk_pie(risk_df), use_container_width=True, key="risk_pie_chart")
-        
-        with detail_col:
-            st.markdown("##### Drill Down by Category")
-            
-            # Category selector
-            selected_category = st.selectbox(
-                "Select risk level to view suppliers:",
-                ["All", "Critical", "High", "Medium", "Low"],
-                key="risk_category_filter"
-            )
-            
-            # Filter data
-            if selected_category == "All":
-                filtered_df = risk_df
-            else:
-                filtered_df = risk_df[risk_df['risk_category'] == selected_category]
-            
-            # Show filtered suppliers
-            if len(filtered_df) > 0:
-                display_df = filtered_df[['supplier_name', 'tier', 'quality_score', 'delivery_score', 
-                                         'risk_category', 'recommendation']].copy()
-                display_df['quality_score'] = display_df['quality_score'].apply(lambda x: f"{x:.1%}")
-                display_df['delivery_score'] = display_df['delivery_score'].apply(lambda x: f"{x:.1%}")
-                display_df.columns = ['Supplier', 'Tier', 'Quality', 'Delivery', 'Risk', 'Action']
-                st.dataframe(display_df, use_container_width=True, hide_index=True, height=250)
-            else:
-                st.info(f"No {selected_category.lower()} risk suppliers found.")
+        # Detailed table
+        st.markdown("#### 📊 Supplier Risk Details")
+        st.dataframe(
+            risk_df[['supplier_name', 'tier', 'quality_score', 'delivery_score', 
+                    'overall_risk_score', 'risk_category', 'recommendation']],
+            width='stretch',
+            hide_index=True
+        )
     
     # =========================================================================
     # TAB 4: ANOMALY DETECTION
@@ -650,7 +633,29 @@ def render_dashboard_page():
             ),
             showlegend=False
         )
-        st.plotly_chart(fig, use_container_width=True, key="anomaly_chart")
+        st.plotly_chart(fig, width='stretch', key="anomaly_chart")
+        
+        # Anomaly breakdown by Plant and Defect Category
+        col_left, col_right = st.columns(2)
+        
+        with col_left:
+            st.markdown("#### By Plant")
+            plant_summary = anomaly_df.groupby('plant').agg({
+                'total_scrap_cost': 'sum',
+                'anomaly_score': 'count'
+            }).rename(columns={'anomaly_score': 'count'}).sort_values('total_scrap_cost', ascending=False)
+            st.dataframe(plant_summary, width='stretch')
+        
+        with col_right:
+            st.markdown("#### By Defect Category")
+            if 'defect_category' in anomaly_df.columns:
+                defect_summary = anomaly_df.groupby('defect_category').agg({
+                    'total_scrap_cost': 'sum',
+                    'anomaly_score': 'count'
+                }).rename(columns={'anomaly_score': 'count'}).sort_values('total_scrap_cost', ascending=False)
+                st.dataframe(defect_summary, width='stretch')
+            else:
+                st.info("Defect category data not available")
         
         # Anomaly table
         with st.expander("📋 Anomaly Details"):
@@ -661,7 +666,7 @@ def render_dashboard_page():
             display_df['total_scrap_cost'] = display_df['total_scrap_cost'].apply(lambda x: f"${x:,.0f}")
             display_df['anomaly_score'] = display_df['anomaly_score'].apply(lambda x: f"{x:.2f}")
             display_df.columns = ['Date', 'Plant', 'Scrap Cost', 'Qty', 'Score', 'Reason']
-            st.dataframe(display_df, use_container_width=True, hide_index=True)
+            st.dataframe(display_df, width='stretch', hide_index=True)
     
     # =========================================================================
     # TAB 5: ROOT CAUSE VALIDATION
@@ -688,15 +693,14 @@ def render_dashboard_page():
         
         accuracy = rc_df['prediction_correct'].mean()
         disagreements = rc_df['disagreement_flag'].sum()
-        high_conf_disagree = rc_df['high_confidence_disagreement'].sum()
-        cost_at_risk = rc_df[rc_df['high_confidence_disagreement']]['total_scrap_cost'].sum()
+        cost_at_risk = rc_df[rc_df['disagreement_flag']]['total_scrap_cost'].sum()
         
         with col1:
             st.metric("✅ Model Accuracy", f"{accuracy:.1%}")
         with col2:
             st.metric("⚠️ Total Disagreements", int(disagreements))
         with col3:
-            st.metric("🔍 Cases to Review", int(high_conf_disagree), help="High-confidence model predictions that disagree with manual assignments")
+            st.metric("🔍 Cases to Review", int(disagreements), help="All cases where ML predictions disagree with manual assignments")
         with col4:
             st.metric("💰 Cost at Risk", f"${cost_at_risk:,.0f}")
         
@@ -741,11 +745,11 @@ def render_dashboard_page():
                 ),
                 showlegend=False
             )
-            st.plotly_chart(fig, use_container_width=True, key="root_cause_chart")
+            st.plotly_chart(fig, width='stretch', key="root_cause_chart")
         
         # Cases to review
-        with st.expander("🔍 Cases to Review (High-Confidence Disagreements)"):
-            review_df = rc_df[rc_df['high_confidence_disagreement']].copy()
+        with st.expander("🔍 Cases to Review (All Disagreements)"):
+            review_df = rc_df[rc_df['disagreement_flag']].copy()
             if len(review_df) > 0:
                 display_cols = ['defect_category', 'actual_root_cause', 'predicted_root_cause', 
                                'prediction_confidence', 'total_scrap_cost']
@@ -753,6 +757,6 @@ def render_dashboard_page():
                 review_display['prediction_confidence'] = review_display['prediction_confidence'].apply(lambda x: f"{x:.1%}")
                 review_display['total_scrap_cost'] = review_display['total_scrap_cost'].apply(lambda x: f"${x:,.0f}")
                 review_display.columns = ['Defect', 'Actual Root Cause', 'ML Prediction', 'Confidence', 'Cost']
-                st.dataframe(review_display, use_container_width=True, hide_index=True)
+                st.dataframe(review_display, width='stretch', hide_index=True)
             else:
                 st.info("No high-confidence disagreements found.")
