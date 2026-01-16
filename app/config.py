@@ -28,14 +28,14 @@ class DatabricksConfig:
     def from_env(cls) -> "DatabricksConfig":
         """Create configuration from environment variables."""
         return cls(
-            host=os.getenv("DATABRICKS_HOST", "adb-984752964297111.11.azuredatabricks.net"),
-            http_path=os.getenv("DATABRICKS_HTTP_PATH", "/sql/1.0/warehouses/148ccb90800933a1"),
+            host=os.getenv("DATABRICKS_HOST", "fe-vm-industry-solutions-buildathon.cloud.databricks.com"),
+            http_path=os.getenv("DATABRICKS_HTTP_PATH", "/sql/1.0/warehouses/288a7ec183eea397"),
             token=os.getenv("DATABRICKS_TOKEN", ""),
             catalog=os.getenv("DATABRICKS_CATALOG", "scrap_catalog"),
             schema=os.getenv("DATABRICKS_SCHEMA", "scrap_demo"),
             dashboard_embed_url=os.getenv(
                 "DASHBOARD_EMBED_URL",
-                "https://adb-984752964297111.11.azuredatabricks.net/embed/dashboardsv3/01f0cfcf667f1b8ba6b3f8158b94f453?o=984752964297111"
+                "https://fe-vm-industry-solutions-buildathon.cloud.databricks.com/embed/dashboardsv3/01f0f2f3a9291b8995a13619abf2528e?o=237438879023004"
             )
         )
     
@@ -58,7 +58,7 @@ class GenieConfig:
     @classmethod
     def from_env(cls) -> "GenieConfig":
         return cls(
-            space_id=os.getenv("GENIE_SPACE_ID", "01f0d05d42ed11eeae85802c1d5bcccd"),
+            space_id=os.getenv("GENIE_SPACE_ID", "01f0ee7c90c9160b80fd7567dc1e3fca"),
             space_name="Scrap Analytics Assistant"
         )
     

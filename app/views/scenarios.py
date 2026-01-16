@@ -700,11 +700,22 @@ def render_supplier_scenario(suppliers_df: pd.DataFrame):
                 paper_bgcolor=theme.get('paper_bgcolor'),
                 plot_bgcolor=theme.get('plot_bgcolor'),
                 font=theme.get('font'),
-                height=250,
-                margin=dict(l=0, r=0, t=30, b=0),
+                height=300,
+                margin=dict(l=60, r=20, t=30, b=80),
                 showlegend=False,
+                xaxis_title="Supplier",
                 yaxis_title="Quality Score (%)",
-                yaxis_range=[70, 105]
+                yaxis_range=[70, 105],
+                xaxis=dict(
+                    tickangle=-30,
+                    tickfont=dict(size=10, color='#4a4a48'),
+                    title_font=dict(size=12, color='#1B3139')
+                ),
+                yaxis=dict(
+                    ticksuffix='%',
+                    tickfont=dict(size=11, color='#4a4a48'),
+                    title_font=dict(size=12, color='#1B3139')
+                )
             )
             
             st.plotly_chart(fig, width='stretch', key="supplier_quality_chart")
@@ -1238,11 +1249,20 @@ def render_plant_scenario(monthly_df: pd.DataFrame, plants: list):
             plot_bgcolor=theme.get('plot_bgcolor'),
             font=theme.get('font'),
             height=300,
-            margin=dict(l=0, r=0, t=40, b=0),
+            margin=dict(l=80, r=20, t=40, b=60),
             legend=dict(orientation='h', y=1.1, font=dict(color='#4a4a48')),
             hovermode='x unified',
             xaxis_title="Month",
-            yaxis_title="Monthly Scrap Cost ($)"
+            yaxis_title="Monthly Scrap Cost ($)",
+            xaxis=dict(
+                tickfont=dict(size=11, color='#4a4a48'),
+                title_font=dict(size=12, color='#1B3139')
+            ),
+            yaxis=dict(
+                tickformat='$,.0f',
+                tickfont=dict(size=11, color='#4a4a48'),
+                title_font=dict(size=12, color='#1B3139')
+            )
         )
         
         st.plotly_chart(fig, width='stretch', key="plant_trajectory_chart")
@@ -1252,23 +1272,23 @@ def render_plant_scenario(monthly_df: pd.DataFrame, plants: list):
         
         st.markdown(f"""
         <div class="glass-card">
-            <h4 style="color: #f1f5f9; margin-bottom: 16px;">📊 5-Year Summary</h4>
+            <h4 style="color: #1B3139; margin-bottom: 16px;">📊 5-Year Summary</h4>
             <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;">
                 <div>
-                    <p style="color: #64748b; margin: 0;">Total Investment</p>
-                    <p style="color: #f1f5f9; font-size: 1.25rem; font-weight: 600; margin: 4px 0;">${investment:,.0f}</p>
+                    <p style="color: #6b6b69; margin: 0;">Total Investment</p>
+                    <p style="color: #1B3139; font-size: 1.25rem; font-weight: 600; margin: 4px 0;">${investment:,.0f}</p>
                 </div>
                 <div>
-                    <p style="color: #64748b; margin: 0;">Cumulative Savings</p>
+                    <p style="color: #6b6b69; margin: 0;">Cumulative Savings</p>
                     <p style="color: #10b981; font-size: 1.25rem; font-weight: 600; margin: 4px 0;">${annual_savings * 5:,.0f}</p>
                 </div>
                 <div>
-                    <p style="color: #64748b; margin: 0;">Net Benefit</p>
+                    <p style="color: #6b6b69; margin: 0;">Net Benefit</p>
                     <p style="color: {benefit_color}; font-size: 1.25rem; font-weight: 600; margin: 4px 0;">${five_year_savings:,.0f}</p>
                 </div>
                 <div>
-                    <p style="color: #64748b; margin: 0;">ROI</p>
-                    <p style="color: #6366f1; font-size: 1.25rem; font-weight: 600; margin: 4px 0;">{roi_pct:.0f}%</p>
+                    <p style="color: #6b6b69; margin: 0;">ROI</p>
+                    <p style="color: #FF3621; font-size: 1.25rem; font-weight: 600; margin: 4px 0;">{roi_pct:.0f}%</p>
                 </div>
             </div>
         </div>
@@ -1372,9 +1392,21 @@ def render_work_center_scenario(wc_df: pd.DataFrame, work_centers: list):
             plot_bgcolor=theme.get('plot_bgcolor'),
             font=theme.get('font'),
             height=350,
-            margin=dict(l=0, r=0, t=20, b=0),
+            margin=dict(l=80, r=20, t=20, b=80),
             showlegend=True,
-            legend=dict(orientation='h', y=-0.2, font=dict(color='#4a4a48'))
+            legend=dict(orientation='h', y=-0.3, font=dict(color='#4a4a48')),
+            xaxis_title="OEE (%)",
+            yaxis_title="Monthly Scrap Cost ($)",
+            xaxis=dict(
+                tickformat='.0%',
+                tickfont=dict(size=11, color='#4a4a48'),
+                title_font=dict(size=12, color='#1B3139')
+            ),
+            yaxis=dict(
+                tickformat='$,.0f',
+                tickfont=dict(size=11, color='#4a4a48'),
+                title_font=dict(size=12, color='#1B3139')
+            )
         )
         
         fig.update_traces(marker=dict(line=dict(width=1, color='white')))
@@ -1529,11 +1561,22 @@ def render_part_scenario(parts_df: pd.DataFrame):
                 paper_bgcolor=theme.get('paper_bgcolor'),
                 plot_bgcolor=theme.get('plot_bgcolor'),
                 font=theme.get('font'),
-                height=300,
-                margin=dict(l=0, r=0, t=40, b=0),
+                height=350,
+                margin=dict(l=80, r=20, t=40, b=100),
                 barmode='group',
                 legend=dict(orientation='h', y=1.1, font=dict(color='#4a4a48')),
-                xaxis_tickangle=-45
+                xaxis_tickangle=-45,
+                xaxis_title="Part Name",
+                yaxis_title="Monthly Scrap Cost ($)",
+                xaxis=dict(
+                    tickfont=dict(size=10, color='#4a4a48'),
+                    title_font=dict(size=12, color='#1B3139')
+                ),
+                yaxis=dict(
+                    tickformat='$,.0f',
+                    tickfont=dict(size=11, color='#4a4a48'),
+                    title_font=dict(size=12, color='#1B3139')
+                )
             )
             
             st.plotly_chart(fig, width='stretch', key="part_bar_chart")

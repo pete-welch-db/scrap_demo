@@ -108,8 +108,8 @@ The app will open at `http://localhost:8501`
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `DATABRICKS_HOST` | Workspace hostname | `adb-984752964297111.11.azuredatabricks.net` |
-| `DATABRICKS_HTTP_PATH` | SQL Warehouse path | `/sql/1.0/warehouses/148ccb90800933a1` |
+| `DATABRICKS_HOST` | Workspace hostname | `fe-vm-industry-solutions-buildathon.cloud.databricks.com` |
+| `DATABRICKS_HTTP_PATH` | SQL Warehouse path | `/sql/1.0/warehouses/288a7ec183eea397` |
 | `DATABRICKS_TOKEN` | Access token | (from .env) |
 | `DASHBOARD_EMBED_URL` | Dashboard iframe URL | (pre-configured) |
 | `DATABRICKS_CATALOG` | Unity Catalog name | `scrap_catalog` |
