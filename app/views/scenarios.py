@@ -738,27 +738,27 @@ def render_supplier_scenario(suppliers_df: pd.DataFrame):
                 reallocate_amount = spend_delta * 0.8  # Assume 80% can be reallocated
                 
                 st.markdown(f"""
-                <div class="glass-card">
-                    <h4 style="color: #f1f5f9; margin-bottom: 12px;">📊 Recommended Reallocation</h4>
-                    <p style="color: #94a3b8; margin-bottom: 12px;">
+                <div style="background: #1B3139; border-radius: 12px; padding: 20px; margin: 12px 0;">
+                    <h4 style="color: #FFFFFF; margin-bottom: 12px;">📊 Recommended Reallocation</h4>
+                    <p style="color: #FF3621; margin-bottom: 12px;">
                         Shift <strong style="color: #10b981;">${reallocate_amount/1e6:.2f}M</strong> 
-                        ({spend_change * 0.8:.0f}% of reduction) to <strong style="color: #f1f5f9;">{best_alt['name']}</strong>
+                        ({spend_change * 0.8:.0f}% of reduction) to <strong style="color: #FFFFFF;">{best_alt['name']}</strong>
                     </p>
                     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; font-size: 0.85rem;">
-                        <div style="background: #12121a; padding: 12px; border-radius: 8px; text-align: center;">
-                            <p style="color: #64748b; margin: 0;">Quality Gain</p>
-                            <p style="color: #10b981; font-size: 1.25rem; font-weight: 600; margin: 4px 0;">
+                        <div style="background: #10b981; padding: 12px; border-radius: 8px; text-align: center;">
+                            <p style="color: #FFFFFF; margin: 0;">Quality Gain</p>
+                            <p style="color: #FFFFFF; font-size: 1.25rem; font-weight: 600; margin: 4px 0;">
                                 +{(best_alt['quality_score'] - selected_supplier['quality_score']) * 100:.1f}%
                             </p>
                         </div>
-                        <div style="background: #12121a; padding: 12px; border-radius: 8px; text-align: center;">
-                            <p style="color: #64748b; margin: 0;">Capacity Fit</p>
-                            <p style="color: {'#10b981' if best_alt['available_capacity'] > 0.2 else '#f59e0b'}; font-size: 1.25rem; font-weight: 600; margin: 4px 0;">
+                        <div style="background: {'#10b981' if best_alt['available_capacity'] > 0.2 else '#f59e0b'}; padding: 12px; border-radius: 8px; text-align: center;">
+                            <p style="color: #FFFFFF; margin: 0;">Capacity Fit</p>
+                            <p style="color: #FFFFFF; font-size: 1.25rem; font-weight: 600; margin: 4px 0;">
                                 {best_alt['available_capacity']:.0%}
                             </p>
                         </div>
-                        <div style="background: #12121a; padding: 12px; border-radius: 8px; text-align: center;">
-                            <p style="color: #64748b; margin: 0;">Est. Scrap Savings</p>
+                        <div style="background: #1B3139; border: 2px solid #10b981; padding: 12px; border-radius: 8px; text-align: center;">
+                            <p style="color: #FFFFFF; margin: 0;">Est. Scrap Savings</p>
                             <p style="color: #10b981; font-size: 1.25rem; font-weight: 600; margin: 4px 0;">
                                 ${(scrap_delta * (best_alt['quality_score'] / selected_supplier['quality_score']))/1e3:.0f}K
                             </p>
@@ -804,8 +804,23 @@ def render_supplier_scenario(suppliers_df: pd.DataFrame):
             plot_bgcolor=theme.get('plot_bgcolor'),
             font=theme.get('font'),
             height=350,
-            margin=dict(l=0, r=0, t=20, b=0),
-            legend=dict(orientation='h', y=-0.15, font=dict(color='#4a4a48'))
+            margin=dict(l=80, r=20, t=30, b=80),
+            legend=dict(orientation='h', y=-0.25, font=dict(color='#4a4a48')),
+            xaxis_title="Quality Score",
+            yaxis_title="Annual Scrap Cost ($)",
+            xaxis=dict(
+                tickformat='.0%',
+                showticklabels=True,
+                tickfont=dict(size=11, color='#4a4a48'),
+                title_font=dict(size=12, color='#1B3139')
+            ),
+            yaxis=dict(
+                tickprefix='$',
+                tickformat=',.0f',
+                showticklabels=True,
+                tickfont=dict(size=11, color='#4a4a48'),
+                title_font=dict(size=12, color='#1B3139')
+            )
         )
         
         st.plotly_chart(fig2, width='stretch', key="supplier_scatter_chart")
