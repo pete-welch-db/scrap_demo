@@ -1,14 +1,14 @@
 # Databricks notebook source
 # MAGIC %md
 # MAGIC # 🔮 Scrap Forecasting Models
-# MAGIC 
+# MAGIC
 # MAGIC ## Business Objective
 # MAGIC This notebook builds time series forecasting models to predict scrap quantities and costs **3 months into the future** at multiple granularities. Accurate forecasting enables:
 # MAGIC - **Budgeting**: Plan for scrap-related costs
 # MAGIC - **Capacity Planning**: Adjust production schedules
 # MAGIC - **Supplier Management**: Anticipate quality issues
 # MAGIC - **Inventory Optimization**: Buffer stock for high-scrap parts
-# MAGIC 
+# MAGIC
 # MAGIC ## Forecast Levels
 # MAGIC | Level | Description | Use Case |
 # MAGIC |-------|-------------|----------|
@@ -16,12 +16,12 @@
 # MAGIC | **By Plant** | Plant-level forecasts | Operations management |
 # MAGIC | **By Supplier** | Supplier-level forecasts | Procurement decisions |
 # MAGIC | **By Part Number** | Part-level forecasts | Inventory planning |
-# MAGIC 
+# MAGIC
 # MAGIC ## ML Approach
 # MAGIC - **Primary Model**: Facebook Prophet (time series with seasonality)
 # MAGIC - **Comparison**: Databricks AutoML for automated model selection
 # MAGIC - **Tracking**: Full MLflow experiment tracking with artifact logging
-# MAGIC 
+# MAGIC
 # MAGIC ## Output Tables
 # MAGIC - `ml_plant_forecast_results`
 # MAGIC - `ml_supplier_forecast_results`  
@@ -32,7 +32,7 @@
 
 # MAGIC %md
 # MAGIC ## 📦 Install Dependencies
-# MAGIC 
+# MAGIC
 # MAGIC Install the Prophet library for time series forecasting. Prophet is developed by Facebook/Meta and handles:
 # MAGIC - Multiple seasonality (yearly, weekly, daily)
 # MAGIC - Holiday effects
@@ -42,13 +42,13 @@
 # COMMAND ----------
 
 # MAGIC %pip install prophet mlflow[databricks] scipy scikit-learn
-
+# MAGIC
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC ## 🔄 Restart Python Environment
-# MAGIC 
+# MAGIC
 # MAGIC After installing packages, we need to restart the Python environment for the new libraries to be available.
 
 # COMMAND ----------
@@ -59,7 +59,7 @@ dbutils.library.restartPython()
 
 # MAGIC %md
 # MAGIC ## 📚 Import Libraries
-# MAGIC 
+# MAGIC
 # MAGIC Import all required libraries:
 # MAGIC - **pandas/numpy**: Data manipulation
 # MAGIC - **prophet**: Time series forecasting
@@ -100,7 +100,7 @@ import threading
 
 # MAGIC %md
 # MAGIC ## ⚙️ Configuration
-# MAGIC 
+# MAGIC
 # MAGIC Define all configuration parameters in one place for easy modification:
 # MAGIC - **CATALOG/SCHEMA**: Unity Catalog location
 # MAGIC - **FORECAST_DAYS**: Prediction horizon (90 days = ~3 months)
@@ -169,7 +169,7 @@ print(f"   MLflow Experiment: Default Notebook Experiment")
 
 # MAGIC %md
 # MAGIC ## 📊 Load and Explore Data
-# MAGIC 
+# MAGIC
 # MAGIC Load scrap transactions from the Silver layer. The Silver layer contains:
 # MAGIC - Cleaned and validated data
 # MAGIC - Enriched with dimension lookups
@@ -226,7 +226,7 @@ print(f"   Unique Parts: {scrap_df.select('part_id').distinct().count()}")
 
 # MAGIC %md
 # MAGIC ## 🛠️ Define Helper Functions
-# MAGIC 
+# MAGIC
 # MAGIC Create reusable functions for:
 # MAGIC 1. **Data preparation** - Convert to Prophet format (ds, y columns)
 # MAGIC 2. **Hyperparameter tuning** - Grid search for optimal parameters
@@ -857,7 +857,7 @@ def tune_prophet_hyperparameters(
 
 # MAGIC %md
 # MAGIC ## 🧠 Define Model Training Function with Time Series Cross-Validation
-# MAGIC 
+# MAGIC
 # MAGIC This function:
 # MAGIC 1. Uses Prophet's time series cross-validation (expanding window)
 # MAGIC 2. Trains Prophet model with seasonality on full dataset
@@ -872,6 +872,7 @@ def tune_prophet_hyperparameters(
 
 # COMMAND ----------
 
+# DBTITLE 1,Cell 17
 def train_prophet_model_with_mlflow(
     train_data: pd.DataFrame,
     model_name: str,
@@ -916,7 +917,7 @@ def train_prophet_model_with_mlflow(
     Returns:
     --------
     tuple
-        (trained_model, forecast_dataframe)
+        (trained_model, forecast_dataframe, validation_metrics)
     """
     
     with mlflow.start_run(run_name=model_name) as run:
@@ -987,92 +988,99 @@ def train_prophet_model_with_mlflow(
                 # Calculate performance metrics across all folds
                 df_p = performance_metrics(df_cv)
 
-            # Get average metrics across all horizons
-            cv_mae = df_p['mae'].mean()
-            cv_mape = df_p['mape'].mean()
-            cv_rmse = df_p['rmse'].mean()
+                # Get average metrics across all horizons
+                cv_mae = df_p['mae'].mean()
+                cv_mape = df_p['mape'].mean()
+                cv_rmse = df_p['rmse'].mean()
 
-            # Get standard deviations
-            cv_mae_std = df_p['mae'].std()
-            cv_mape_std = df_p['mape'].std()
-            cv_rmse_std = df_p['rmse'].std()
+                # Get standard deviations
+                cv_mae_std = df_p['mae'].std()
+                cv_mape_std = df_p['mape'].std()
+                cv_rmse_std = df_p['rmse'].std()
 
-            # Number of folds
-            num_folds = df_cv['cutoff'].nunique()
+                # Number of folds
+                num_folds = df_cv['cutoff'].nunique()
 
-            mlflow.log_param("cv_num_folds", num_folds)
+                mlflow.log_param("cv_num_folds", num_folds)
 
-            # ===== LOG CROSS-VALIDATION METRICS =====
-            mlflow.log_metric("cv_mae_mean", cv_mae)
-            mlflow.log_metric("cv_mae_std", cv_mae_std)
-            mlflow.log_metric("cv_mape_mean", cv_mape)
-            mlflow.log_metric("cv_mape_std", cv_mape_std)
-            mlflow.log_metric("cv_rmse_mean", cv_rmse)
-            mlflow.log_metric("cv_rmse_std", cv_rmse_std)
+                # ===== LOG CROSS-VALIDATION METRICS =====
+                mlflow.log_metric("cv_mae_mean", cv_mae)
+                mlflow.log_metric("cv_mae_std", cv_mae_std)
+                mlflow.log_metric("cv_mape_mean", cv_mape)
+                mlflow.log_metric("cv_mape_std", cv_mape_std)
+                mlflow.log_metric("cv_rmse_mean", cv_rmse)
+                mlflow.log_metric("cv_rmse_std", cv_rmse_std)
 
-            # Set val_metrics for compatibility with later code
-            val_metrics = {
-                'mae': cv_mae,
-                'mape': cv_mape,
-                'rmse': cv_rmse
-            }
+                # Set val_metrics for compatibility with later code
+                val_metrics = {
+                    'mae': cv_mae,
+                    'mape': cv_mape,
+                    'rmse': cv_rmse
+                }
 
-            print(f"   ✅ Cross-validation complete: {num_folds} folds")
+                print(f"   ✅ Cross-validation complete: {num_folds} folds")
             
-        except Exception as e:
-            print(f"   ⚠️ Cross-validation failed: {str(e)}")
-            print("   Falling back to simple train/test split...")
-            
-            # Fallback to simple validation
-            split_date = train_data['ds'].max() - timedelta(days=TRAIN_TEST_SPLIT_DAYS)
-            train_set = train_data[train_data['ds'] <= split_date]
-            test_set = train_data[train_data['ds'] > split_date]
-            
-            # Refit on training set only
-            model_temp = Prophet(
-                yearly_seasonality=yearly_seasonality,
-                weekly_seasonality=weekly_seasonality,
-                daily_seasonality=False,
-                seasonality_mode=seasonality_mode,
-                interval_width=0.95,
-                changepoint_prior_scale=0.05
-            )
-            if include_holidays:
-                model_temp.add_country_holidays(country_name='US')
-            model_temp.fit(train_set)
-            
-            future_temp = model_temp.make_future_dataframe(periods=TRAIN_TEST_SPLIT_DAYS)
-            forecast_temp = model_temp.predict(future_temp)
-            
-            test_forecast = forecast_temp[forecast_temp['ds'].isin(test_set['ds'])]
-            test_merged = test_set.merge(test_forecast[['ds', 'yhat']], on='ds')
-            
-            val_metrics = calculate_metrics(test_merged['y'], test_merged['yhat'])
-            
-            cv_mae = val_metrics['mae']
-            cv_mape = val_metrics['mape']
-            cv_rmse = val_metrics['rmse']
-            cv_mae_std = 0
-            cv_mape_std = 0
-            cv_rmse_std = 0
-            num_folds = 1
-            
-            mlflow.log_param("cv_num_folds", 1)
-            mlflow.log_param("cv_fallback", True)
-            mlflow.log_metric("cv_mae_mean", cv_mae)
-            mlflow.log_metric("cv_mape_mean", cv_mape)
-            mlflow.log_metric("cv_rmse_mean", cv_rmse)
+            except Exception as e:
+                print(f"   ⚠️ Cross-validation failed: {str(e)}")
+                print("   Falling back to simple train/test split...")
+                
+                # Fallback to simple validation
+                split_date = train_data['ds'].max() - timedelta(days=TRAIN_TEST_SPLIT_DAYS)
+                train_set = train_data[train_data['ds'] <= split_date]
+                test_set = train_data[train_data['ds'] > split_date]
+                
+                # Refit on training set only
+                model_temp = Prophet(
+                    yearly_seasonality=yearly_seasonality,
+                    weekly_seasonality=weekly_seasonality,
+                    daily_seasonality=False,
+                    seasonality_mode=seasonality_mode,
+                    interval_width=0.95,
+                    changepoint_prior_scale=0.05
+                )
+                if include_holidays:
+                    model_temp.add_country_holidays(country_name='US')
+                model_temp.fit(train_set)
+                
+                future_temp = model_temp.make_future_dataframe(periods=TRAIN_TEST_SPLIT_DAYS)
+                forecast_temp = model_temp.predict(future_temp)
+                
+                test_forecast = forecast_temp[forecast_temp['ds'].isin(test_set['ds'])]
+                test_merged = test_set.merge(test_forecast[['ds', 'yhat']], on='ds')
+                
+                val_metrics = calculate_metrics(test_merged['y'], test_merged['yhat'])
+                
+                cv_mae = val_metrics['mae']
+                cv_mape = val_metrics['mape']
+                cv_rmse = val_metrics['rmse']
+                cv_mae_std = 0
+                cv_mape_std = 0
+                cv_rmse_std = 0
+                num_folds = 1
+                
+                mlflow.log_param("cv_num_folds", 1)
+                mlflow.log_param("cv_fallback", True)
+                mlflow.log_metric("cv_mae_mean", cv_mae)
+                mlflow.log_metric("cv_mape_mean", cv_mape)
+                mlflow.log_metric("cv_rmse_mean", cv_rmse)
         
         else:
             # CV is disabled - skip validation entirely
             print("   ⚡ Skipping cross-validation (ENABLE_MODEL_CV=False)")
-            cv_mae = None
-            cv_mape = None
-            cv_rmse = None
+            cv_mae = 0
+            cv_mape = 0
+            cv_rmse = 0
             cv_mae_std = 0
             cv_mape_std = 0
             cv_rmse_std = 0
             num_folds = 0
+            
+            # Define val_metrics as zeros when CV is disabled
+            val_metrics = {
+                'mae': 0,
+                'mape': 0,
+                'rmse': 0
+            }
             
             mlflow.log_param("cv_enabled", False)
             mlflow.log_param("cv_num_folds", 0)
@@ -1140,13 +1148,26 @@ def train_prophet_model_with_mlflow(
         # ===== LOG MODEL ARTIFACT =====
         mlflow.prophet.log_model(model, "prophet_model")
         
-        # ===== LOG FORECAST DATA =====
-        # Save forecast as CSV artifact
-        forecast_output = forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].copy()
-        forecast_output.to_csv("/tmp/forecast.csv", index=False)
-        mlflow.log_artifact("/tmp/forecast.csv")
+        # ===== LOG FORECAST DATA WITH UNIQUE TEMP FILE =====
+        import tempfile
+        import os
         
-        # ===== LOG MODEL SUMMARY =====
+        forecast_output = forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].copy()
+        
+        # Create unique temp file for forecast
+        with tempfile.NamedTemporaryFile(mode='w', suffix='_forecast.csv', delete=False) as tmp_forecast:
+            forecast_csv_path = tmp_forecast.name
+        
+        forecast_output.to_csv(forecast_csv_path, index=False)
+        mlflow.log_artifact(forecast_csv_path, "forecast.csv")
+        
+        # Clean up temp file
+        try:
+            os.remove(forecast_csv_path)
+        except:
+            pass
+        
+        # ===== LOG MODEL SUMMARY WITH UNIQUE TEMP FILE =====
         summary = {
             "model_name": model_name,
             "training_records": len(train_data),
@@ -1156,9 +1177,19 @@ def train_prophet_model_with_mlflow(
             "run_id": run.info.run_id
         }
         
-        with open("/tmp/model_summary.json", "w") as f:
+        # Create unique temp file for summary
+        with tempfile.NamedTemporaryFile(mode='w', suffix='_summary.json', delete=False) as tmp_summary:
+            summary_json_path = tmp_summary.name
+        
+        with open(summary_json_path, "w") as f:
             json.dump(summary, f, indent=2)
-        mlflow.log_artifact("/tmp/model_summary.json")
+        mlflow.log_artifact(summary_json_path, "model_summary.json")
+        
+        # Clean up temp file
+        try:
+            os.remove(summary_json_path)
+        except:
+            pass
         
         # ===== PRINT RESULTS =====
         print(f"\n{'='*60}")
@@ -1166,10 +1197,13 @@ def train_prophet_model_with_mlflow(
         print(f"{'='*60}")
         print(f"   Training Records: {len(train_data):,}")
         print(f"   CV Folds: {num_folds}")
-        print(f"\n   📊 Cross-Validation Metrics (Mean ± Std):")
-        print(f"      MAE:  ${cv_mae:,.2f} ± ${cv_mae_std:,.2f}")
-        print(f"      MAPE: {cv_mape:.2f}% ± {cv_mape_std:.2f}%")
-        print(f"      RMSE: ${cv_rmse:,.2f} ± ${cv_rmse_std:,.2f}")
+        if num_folds > 0:
+            print(f"\n   📊 Cross-Validation Metrics (Mean ± Std):")
+            print(f"      MAE:  ${cv_mae:,.2f} ± ${cv_mae_std:,.2f}")
+            print(f"      MAPE: {cv_mape:.2f}% ± {cv_mape_std:.2f}%")
+            print(f"      RMSE: ${cv_rmse:,.2f} ± ${cv_rmse_std:,.2f}")
+        else:
+            print(f"   ⚡ CV skipped for speed")
         print(f"\n   🔗 MLflow Run ID: {run.info.run_id}")
         
         return model, forecast, val_metrics
@@ -1178,7 +1212,7 @@ def train_prophet_model_with_mlflow(
 
 # MAGIC %md
 # MAGIC ## 🔍 Forecast Explainability Functions
-# MAGIC 
+# MAGIC
 # MAGIC Functions to explain and interpret Prophet forecasts for business stakeholders.
 
 # COMMAND ----------
@@ -1733,7 +1767,7 @@ def explain_forecast_uncertainty(model, forecast: pd.DataFrame, cv_results: pd.D
 
 # MAGIC %md
 # MAGIC ## 🚀 Parallel Training Functions
-# MAGIC 
+# MAGIC
 # MAGIC Functions to train multiple models in parallel for faster execution.
 
 # COMMAND ----------
@@ -1982,7 +2016,7 @@ def train_multi_level_forecasts_parallel(
 
 # MAGIC %md
 # MAGIC ## 1️⃣ Total Scrap Cost Forecast
-# MAGIC 
+# MAGIC
 # MAGIC First, we'll build a company-wide forecast to predict total daily scrap cost.
 # MAGIC This provides an overall view for executive planning and budgeting.
 
@@ -1990,7 +2024,7 @@ def train_multi_level_forecasts_parallel(
 
 # MAGIC %md
 # MAGIC ### Prepare Total Scrap Data
-# MAGIC 
+# MAGIC
 # MAGIC Aggregate all scrap transactions to daily totals.
 
 # COMMAND ----------
@@ -2015,7 +2049,7 @@ total_cost_data.head(10)
 
 # MAGIC %md
 # MAGIC ### Tune Hyperparameters
-# MAGIC 
+# MAGIC
 # MAGIC Run grid search to find optimal Prophet hyperparameters for this dataset.
 
 # COMMAND ----------
@@ -2071,7 +2105,7 @@ else:
 
 # MAGIC %md
 # MAGIC ### Train Total Scrap Model
-# MAGIC 
+# MAGIC
 # MAGIC Train Prophet model for total scrap cost with full MLflow logging.
 
 # COMMAND ----------
@@ -2093,7 +2127,7 @@ total_model, total_forecast, total_val_metrics = train_prophet_model_with_mlflow
 
 # MAGIC %md
 # MAGIC ### Visualize Total Scrap Forecast
-# MAGIC 
+# MAGIC
 # MAGIC Display the forecast with confidence intervals and trend components.
 
 # COMMAND ----------
@@ -2110,7 +2144,7 @@ plt.show()
 
 # MAGIC %md
 # MAGIC ### Analyze Seasonality Components
-# MAGIC 
+# MAGIC
 # MAGIC Prophet decomposes the time series into:
 # MAGIC - **Trend**: Long-term direction
 # MAGIC - **Yearly Seasonality**: Annual patterns (e.g., summer shutdowns)
@@ -2128,7 +2162,7 @@ plt.show()
 
 # MAGIC %md
 # MAGIC ### 🔍 Explain Total Scrap Forecast
-# MAGIC 
+# MAGIC
 # MAGIC Use explainability functions to understand what's driving the forecast.
 
 # COMMAND ----------
@@ -2148,7 +2182,7 @@ print(forecast_narrative)
 
 # MAGIC %md
 # MAGIC ### 📊 Component Contribution Analysis
-# MAGIC 
+# MAGIC
 # MAGIC Break down the forecast to show how much each component contributes.
 
 # COMMAND ----------
@@ -2210,7 +2244,7 @@ plt.show()
 
 # MAGIC %md
 # MAGIC ### 🎯 What-If Scenario Analysis
-# MAGIC 
+# MAGIC
 # MAGIC Explore alternative scenarios to understand component impacts.
 
 # COMMAND ----------
@@ -2277,7 +2311,7 @@ for scenario_key, scenario_data in scenarios.items():
 
 # MAGIC %md
 # MAGIC ### 📊 Uncertainty Breakdown
-# MAGIC 
+# MAGIC
 # MAGIC Understand sources of forecast uncertainty.
 
 # COMMAND ----------
@@ -2344,7 +2378,7 @@ plt.show()
 
 # MAGIC %md
 # MAGIC ## 2️⃣ Forecast by Plant
-# MAGIC 
+# MAGIC
 # MAGIC Train individual forecast models for each plant. This enables:
 # MAGIC - Plant-specific budgeting
 # MAGIC - Performance comparison
@@ -2354,7 +2388,7 @@ plt.show()
 
 # MAGIC %md
 # MAGIC ### Define Multi-Model Training Function
-# MAGIC 
+# MAGIC
 # MAGIC This function trains a separate Prophet model for each entity (plant, supplier, part)
 # MAGIC and logs all models to MLflow.
 
@@ -2486,7 +2520,7 @@ def train_multi_level_forecasts(
 
 # MAGIC %md
 # MAGIC ### Train Plant-Level Models
-# MAGIC 
+# MAGIC
 # MAGIC Train a forecast model for each of the 6 plants using parallel execution.
 
 # COMMAND ----------
@@ -2520,7 +2554,7 @@ else:
 
 # MAGIC %md
 # MAGIC ### Visualize Plant Forecasts
-# MAGIC 
+# MAGIC
 # MAGIC Compare forecasts across all plants in a grid view.
 
 # COMMAND ----------
@@ -2576,7 +2610,7 @@ plt.show()
 
 # MAGIC %md
 # MAGIC ## 3️⃣ Forecast by Supplier
-# MAGIC 
+# MAGIC
 # MAGIC Train forecasts for the **top 10 suppliers** by scrap volume using parallel execution.
 # MAGIC This helps procurement teams anticipate supplier quality issues.
 
@@ -2657,7 +2691,7 @@ plt.show()
 
 # MAGIC %md
 # MAGIC ## 4️⃣ Forecast by Part Number
-# MAGIC 
+# MAGIC
 # MAGIC Train forecasts for the **top 20 parts** by scrap volume using parallel execution.
 # MAGIC This helps inventory planning teams anticipate high-scrap parts.
 
@@ -2714,7 +2748,7 @@ else:
 
 # MAGIC %md
 # MAGIC ## Create Forecast Result Tables
-# MAGIC 
+# MAGIC
 # MAGIC Save all forecasts to Delta tables for use in dashboards and downstream applications.
 
 # COMMAND ----------
@@ -2888,7 +2922,7 @@ print(f"✅ Saved {total_forecast_spark.count():,} total forecast records")
 
 # MAGIC %md
 # MAGIC ## Register Total Forecast Model
-# MAGIC 
+# MAGIC
 # MAGIC Register the total scrap forecast model to Unity Catalog Model Registry for:
 # MAGIC - Version control
 # MAGIC - Production deployment
@@ -2944,7 +2978,7 @@ with mlflow.start_run(run_name="register_production_model") as run:
 
 # MAGIC %md
 # MAGIC ## View 30-Day Forecast Summary
-# MAGIC 
+# MAGIC
 # MAGIC Display aggregated forecast for the next 30 days.
 
 # COMMAND ----------
@@ -2978,7 +3012,7 @@ with mlflow.start_run(run_name="register_production_model") as run:
 
 # MAGIC %md
 # MAGIC ## 📊 MLflow Experiment Summary
-# MAGIC 
+# MAGIC
 # MAGIC View all model runs in MLflow:
 # MAGIC 1. Navigate to **Experiments** in the left sidebar
 # MAGIC 2. Search for `/Shared/scrap_demo/scrap_forecasting`
@@ -3010,9 +3044,9 @@ print("=" * 70)
 # MAGIC ---
 # MAGIC # 🔍 MLOps: Drift Detection & Model Monitoring
 # MAGIC ---
-# MAGIC 
+# MAGIC
 # MAGIC Comprehensive drift monitoring to ensure model performance remains stable over time.
-# MAGIC 
+# MAGIC
 # MAGIC ## Key Monitoring Capabilities:
 # MAGIC 1. **Data Drift Detection** - Identify distribution changes in incoming data
 # MAGIC 2. **Model Performance Drift** - Track degradation in prediction accuracy
@@ -3023,7 +3057,7 @@ print("=" * 70)
 
 # MAGIC %md
 # MAGIC ## 1️⃣ Data Drift Detection
-# MAGIC 
+# MAGIC
 # MAGIC Compare recent data distribution against training baseline using:
 # MAGIC - **Kolmogorov-Smirnov Test**: Statistical test for distribution changes
 # MAGIC - **Wasserstein Distance**: Measures magnitude of distribution shift
@@ -3067,9 +3101,9 @@ else:
 
 # MAGIC %md
 # MAGIC ## 2️⃣ Model Performance Drift Detection
-# MAGIC 
+# MAGIC
 # MAGIC Monitor model accuracy on recent data compared to baseline performance.
-# MAGIC 
+# MAGIC
 # MAGIC Tracks:
 # MAGIC - MAE, MAPE, RMSE degradation
 # MAGIC - Prediction vs actual comparison
@@ -3118,7 +3152,7 @@ else:
 
 # MAGIC %md
 # MAGIC ## 3️⃣ Drift Monitoring Report
-# MAGIC 
+# MAGIC
 # MAGIC Generate a comprehensive drift monitoring report with recommendations.
 
 # COMMAND ----------
@@ -3136,9 +3170,9 @@ print(drift_report)
 
 # MAGIC %md
 # MAGIC ## 4️⃣ Log Drift Metrics to MLflow
-# MAGIC 
+# MAGIC
 # MAGIC Store drift metrics in MLflow for historical tracking and alerting.
-# MAGIC 
+# MAGIC
 # MAGIC These metrics can be:
 # MAGIC - Monitored over time using MLflow UI
 # MAGIC - Used to trigger retraining pipelines
@@ -3171,7 +3205,7 @@ with mlflow.start_run(run_name="drift_monitoring_total_forecast") as drift_run:
 
 # MAGIC %md
 # MAGIC ## 5️⃣ Plant-Level Drift Monitoring
-# MAGIC 
+# MAGIC
 # MAGIC Run drift detection for each plant model to identify which plants need retraining.
 
 # COMMAND ----------
@@ -3246,7 +3280,7 @@ display(plant_drift_df)
 
 # MAGIC %md
 # MAGIC ## 6️⃣ Save Drift Monitoring Results
-# MAGIC 
+# MAGIC
 # MAGIC Store drift detection results in Delta tables for ongoing monitoring and alerting.
 
 # COMMAND ----------
@@ -3326,7 +3360,7 @@ else:
 
 # MAGIC %md
 # MAGIC ## 7️⃣ Drift Monitoring Dashboard Query
-# MAGIC 
+# MAGIC
 # MAGIC Query drift monitoring results for visualization in dashboards.
 
 # COMMAND ----------
@@ -3350,37 +3384,37 @@ else:
 
 # MAGIC %md
 # MAGIC ## 🎯 MLOps Best Practices Implemented
-# MAGIC 
+# MAGIC
 # MAGIC ✅ **Data Drift Detection**
 # MAGIC - Statistical tests (KS test, Wasserstein distance)
 # MAGIC - Distribution monitoring
 # MAGIC - Configurable thresholds
-# MAGIC 
+# MAGIC
 # MAGIC ✅ **Model Performance Drift**
 # MAGIC - Continuous accuracy monitoring
 # MAGIC - Degradation tracking
 # MAGIC - Automated alerting
-# MAGIC 
+# MAGIC
 # MAGIC ✅ **MLflow Integration**
 # MAGIC - All metrics logged
 # MAGIC - Historical tracking
 # MAGIC - Experiment comparison
-# MAGIC 
+# MAGIC
 # MAGIC ✅ **Automated Monitoring**
 # MAGIC - Delta tables for results
 # MAGIC - SQL queries for dashboards
 # MAGIC - Retraining recommendations
-# MAGIC 
+# MAGIC
 # MAGIC ## 🔄 Recommended Monitoring Schedule
-# MAGIC 
+# MAGIC
 # MAGIC - **Daily**: Check drift metrics via dashboard
 # MAGIC - **Weekly**: Review drift trends and patterns
 # MAGIC - **Monthly**: Evaluate retraining needs
 # MAGIC - **Quarterly**: Update drift detection thresholds
-# MAGIC 
+# MAGIC
 # MAGIC ## 🚨 Alert Thresholds (Configurable)
-# MAGIC 
+# MAGIC
 # MAGIC - `DRIFT_P_VALUE_THRESHOLD`: {DRIFT_P_VALUE_THRESHOLD} (KS test significance)
 # MAGIC - `DRIFT_DISTANCE_THRESHOLD`: {DRIFT_DISTANCE_THRESHOLD} (Wasserstein distance)
 # MAGIC - `MODEL_PERFORMANCE_DEGRADATION_THRESHOLD`: {MODEL_PERFORMANCE_DEGRADATION_THRESHOLD} (15% degradation)
-
+# MAGIC

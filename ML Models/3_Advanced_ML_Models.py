@@ -1,11 +1,11 @@
 # Databricks notebook source
 # MAGIC %md
 # MAGIC # 🚀 Advanced ML Models for Scrap Reduction
-# MAGIC 
+# MAGIC
 # MAGIC ## Business Objective
-# MAGIC 
+# MAGIC
 # MAGIC This notebook implements additional ML models to support proactive scrap reduction:
-# MAGIC 
+# MAGIC
 # MAGIC | Model | Purpose | Business Value |
 # MAGIC |-------|---------|----------------|
 # MAGIC | **Anomaly Detection** | Detect unusual scrap spikes | Early warning system |
@@ -13,7 +13,7 @@
 # MAGIC | **Equipment Failure Prediction** | Identify high-scrap equipment | Maintenance prioritization |
 # MAGIC | **Defect Pattern Clustering** | Find hidden defect patterns | Root cause discovery |
 # MAGIC | **Corrective Action Recommender** | Suggest proven actions | Faster 8D resolution |
-# MAGIC 
+# MAGIC
 # MAGIC ## ML Framework
 # MAGIC - **Algorithms**: Isolation Forest, Random Forest, K-Means, TF-IDF
 # MAGIC - **Tracking**: Full MLflow experiment tracking
@@ -41,7 +41,7 @@ dbutils.library.restartPython()
 
 # MAGIC %md
 # MAGIC ## 📚 Import Libraries
-# MAGIC 
+# MAGIC
 # MAGIC Import all required libraries:
 # MAGIC - **Anomaly Detection**: Isolation Forest
 # MAGIC - **Classification**: Random Forest, Gradient Boosting
@@ -99,7 +99,7 @@ import seaborn as sns
 
 # MAGIC %md
 # MAGIC ## ⚙️ Configuration
-# MAGIC 
+# MAGIC
 # MAGIC Set up Unity Catalog paths and MLflow experiment.
 
 # COMMAND ----------
@@ -138,7 +138,7 @@ print(f"   MLflow Experiment: Default Notebook Experiment")
 
 # MAGIC %md
 # MAGIC ## Load All Required Tables
-# MAGIC 
+# MAGIC
 # MAGIC Load scrap transactions, equipment, suppliers, and 8D reports from Silver layer.
 
 # COMMAND ----------
@@ -195,10 +195,10 @@ print(f"   8D Reports: {eight_d_df.count():,}")
 # MAGIC ---
 # MAGIC # 🚨 Model 1: Anomaly Detection
 # MAGIC ---
-# MAGIC 
+# MAGIC
 # MAGIC ## Objective
 # MAGIC Detect unusual daily scrap patterns for early intervention.
-# MAGIC 
+# MAGIC
 # MAGIC ## Approach
 # MAGIC Use **Isolation Forest** algorithm which:
 # MAGIC - Identifies data points that are "isolated" from normal patterns
@@ -209,7 +209,7 @@ print(f"   8D Reports: {eight_d_df.count():,}")
 
 # MAGIC %md
 # MAGIC ## Aggregate Daily Scrap Metrics
-# MAGIC 
+# MAGIC
 # MAGIC Create daily aggregations with features that may indicate anomalies:
 # MAGIC - Quantity and cost metrics
 # MAGIC - Diversity metrics (unique defects, parts, plants)
@@ -252,7 +252,7 @@ print(f"   Date Range: {daily_scrap['transaction_date'].min()} to {daily_scrap['
 
 # MAGIC %md
 # MAGIC ## Calculate Rolling Features
-# MAGIC 
+# MAGIC
 # MAGIC Add time-based features that capture trends and volatility:
 # MAGIC - 7-day rolling averages
 # MAGIC - Percentage change from previous day
@@ -280,7 +280,7 @@ daily_scrap.head()
 
 # MAGIC %md
 # MAGIC ## Train Anomaly Detection Model
-# MAGIC 
+# MAGIC
 # MAGIC Train Isolation Forest with MLflow tracking:
 # MAGIC - **contamination**: Expected proportion of anomalies (~5%)
 # MAGIC - **n_estimators**: Number of isolation trees
@@ -304,6 +304,11 @@ X_scaled = scaler.fit_transform(X_anomaly)
 print(f"📊 Feature Matrix Shape: {X_scaled.shape}")
 
 # COMMAND ----------
+
+# DBTITLE 1,Train Anomaly Detection Model
+import tempfile
+import os
+import pickle
 
 # Disable autolog for custom logging
 mlflow.sklearn.autolog(disable=True)
@@ -392,10 +397,12 @@ with mlflow.start_run(run_name="scrap_anomaly_detection") as run:
     mlflow.sklearn.log_model(iso_forest, "model")
     
     # ===== LOG SCALER (needed for inference) =====
-    import pickle
-    with open("/tmp/scaler.pkl", "wb") as f:
-        pickle.dump(scaler, f)
-    mlflow.log_artifact("/tmp/scaler.pkl")
+    # Use temporary directory with proper permissions
+    with tempfile.TemporaryDirectory() as tmpdir:
+        scaler_path = os.path.join(tmpdir, "scaler.pkl")
+        with open(scaler_path, "wb") as f:
+            pickle.dump(scaler, f)
+        mlflow.log_artifact(scaler_path)
     
     # ===== PRINT RESULTS =====
     print(f"\n{'='*60}")
@@ -412,7 +419,7 @@ with mlflow.start_run(run_name="scrap_anomaly_detection") as run:
 
 # MAGIC %md
 # MAGIC ## Visualize Anomaly Patterns
-# MAGIC 
+# MAGIC
 # MAGIC Analyze characteristics of detected anomalies.
 
 # COMMAND ----------
@@ -448,7 +455,7 @@ plt.show()
 
 # MAGIC %md
 # MAGIC ## Compare Normal vs Anomaly Characteristics
-# MAGIC 
+# MAGIC
 # MAGIC Statistical comparison of normal days vs anomalous days.
 
 # COMMAND ----------
@@ -475,13 +482,13 @@ print(comparison.to_string(index=False))
 # MAGIC ---
 # MAGIC # 📈 Model 1B: Time Series Anomaly Detection
 # MAGIC ---
-# MAGIC 
+# MAGIC
 # MAGIC ## Objective
 # MAGIC Detect anomalies using time series forecasting to account for:
 # MAGIC - **Trends**: Long-term increase/decrease in scrap
 # MAGIC - **Seasonality**: Weekly, monthly patterns
 # MAGIC - **Sequential Dependencies**: How today relates to recent history
-# MAGIC 
+# MAGIC
 # MAGIC ## Approach
 # MAGIC 1. Train Prophet forecast model on historical scrap data
 # MAGIC 2. Predict expected scrap with uncertainty intervals
@@ -492,7 +499,7 @@ print(comparison.to_string(index=False))
 
 # MAGIC %md
 # MAGIC ## Prepare Time Series Data
-# MAGIC 
+# MAGIC
 # MAGIC Prophet requires columns named 'ds' (date) and 'y' (value).
 
 # COMMAND ----------
@@ -665,14 +672,15 @@ with mlflow.start_run(run_name="ts_anomaly_prophet_qty") as run:
 
 # MAGIC %md
 # MAGIC ## Analyze Time Series Anomalies
-# MAGIC 
+# MAGIC
 # MAGIC Compare time series anomalies with Isolation Forest anomalies.
 
 # COMMAND ----------
 
+# DBTITLE 1,Compare Anomaly Detection Methods
 # Compare TS anomalies with Isolation Forest anomalies
 comparison_df = pd.DataFrame({
-    'date': forecast_full['ds'],
+    'date': pd.to_datetime(forecast_full['ds']).dt.date,  # Convert to date only
     'daily_qty': forecast_full['y'],
     'prophet_forecast': forecast_full['yhat'],
     'forecast_lower': forecast_full['yhat_lower'],
@@ -681,15 +689,22 @@ comparison_df = pd.DataFrame({
     'anomaly_severity': forecast_full['anomaly_severity']
 })
 
+# Convert transaction_date to date type for matching
+daily_scrap_for_merge = daily_scrap[['transaction_date', 'is_anomaly']].copy()
+daily_scrap_for_merge['transaction_date'] = pd.to_datetime(daily_scrap_for_merge['transaction_date']).dt.date
+
 # Merge with Isolation Forest results
 comparison_df = comparison_df.merge(
-    daily_scrap[['transaction_date', 'is_anomaly']],
+    daily_scrap_for_merge,
     left_on='date',
     right_on='transaction_date',
     how='left'
 )
 comparison_df.rename(columns={'is_anomaly': 'iso_forest_anomaly'}, inplace=True)
 comparison_df.drop('transaction_date', axis=1, inplace=True)
+
+# Fill NaN values in iso_forest_anomaly with 0 (for dates not in daily_scrap)
+comparison_df['iso_forest_anomaly'] = comparison_df['iso_forest_anomaly'].fillna(0).astype(int)
 
 # Calculate agreement
 both_methods = (comparison_df['ts_anomaly'] == 1) & (comparison_df['iso_forest_anomaly'] == 1)
@@ -708,22 +723,25 @@ print(f"\n   Agreement Rate: {(both_methods.sum() + neither.sum()) / len(compari
 # Visualize comparison
 fig, ax = plt.subplots(figsize=(14, 6))
 
+# Convert date back to datetime for plotting
+comparison_df['date_plot'] = pd.to_datetime(comparison_df['date'])
+
 # Plot actual values
-ax.plot(comparison_df['date'], comparison_df['daily_qty'], 
+ax.plot(comparison_df['date_plot'], comparison_df['daily_qty'], 
         'k-', alpha=0.3, linewidth=1, label='Daily Qty')
 
 # Mark anomalies by method
-both_dates = comparison_df[both_methods]['date']
+both_dates = comparison_df[both_methods]['date_plot']
 both_vals = comparison_df[both_methods]['daily_qty']
 ax.scatter(both_dates, both_vals, c='red', s=100, marker='o', 
            label=f'Both Methods ({len(both_dates)})', zorder=5)
 
-ts_only_dates = comparison_df[only_ts]['date']
+ts_only_dates = comparison_df[only_ts]['date_plot']
 ts_only_vals = comparison_df[only_ts]['daily_qty']
 ax.scatter(ts_only_dates, ts_only_vals, c='orange', s=80, marker='^',
            label=f'Time Series Only ({len(ts_only_dates)})', zorder=4)
 
-iso_only_dates = comparison_df[only_iso]['date']
+iso_only_dates = comparison_df[only_iso]['date_plot']
 iso_only_vals = comparison_df[only_iso]['daily_qty']
 ax.scatter(iso_only_dates, iso_only_vals, c='blue', s=80, marker='s',
            label=f'Isolation Forest Only ({len(iso_only_dates)})', zorder=4)
@@ -784,10 +802,10 @@ print(top_anomalies.to_string(index=False))
 # MAGIC ---
 # MAGIC # 📊 Model 2: Supplier Risk Scoring
 # MAGIC ---
-# MAGIC 
+# MAGIC
 # MAGIC ## Objective
 # MAGIC Predict which suppliers will have high scrap in the upcoming month.
-# MAGIC 
+# MAGIC
 # MAGIC ## Approach
 # MAGIC - Aggregate monthly supplier performance metrics
 # MAGIC - Train classifier to predict "high scrap" next month
@@ -797,7 +815,7 @@ print(top_anomalies.to_string(index=False))
 
 # MAGIC %md
 # MAGIC ## Aggregate Monthly Supplier Metrics
-# MAGIC 
+# MAGIC
 # MAGIC Create monthly aggregations of supplier performance.
 
 # COMMAND ----------
@@ -840,7 +858,7 @@ print(f"   Unique Suppliers: {supplier_metrics['supplier_id'].nunique()}")
 
 # MAGIC %md
 # MAGIC ## Create Target Variable
-# MAGIC 
+# MAGIC
 # MAGIC Define "high scrap" as next month's quantity being >20% above supplier's median.
 
 # COMMAND ----------
@@ -994,7 +1012,7 @@ with mlflow.start_run(run_name="supplier_risk_model") as run:
 
 # MAGIC %md
 # MAGIC ## Score Current Suppliers
-# MAGIC 
+# MAGIC
 # MAGIC Apply model to score all suppliers for current risk level.
 
 # COMMAND ----------
@@ -1028,7 +1046,7 @@ print(high_risk[["supplier_name_lookup", "supplier_tier_lookup",
 # MAGIC ---
 # MAGIC # 🔧 Model 3: Equipment Failure Prediction
 # MAGIC ---
-# MAGIC 
+# MAGIC
 # MAGIC ## Objective
 # MAGIC Identify equipment likely to cause high scrap based on age, OEE, and history.
 
@@ -1121,7 +1139,7 @@ print(equip_importance.to_string(index=False))
 # MAGIC ---
 # MAGIC # 🔬 Model 4: Defect Pattern Clustering
 # MAGIC ---
-# MAGIC 
+# MAGIC
 # MAGIC ## Objective
 # MAGIC Use unsupervised learning to discover hidden patterns in defect data.
 
@@ -1157,7 +1175,7 @@ print(f"📊 Defect Codes: {len(defect_patterns):,}")
 
 # MAGIC %md
 # MAGIC ## Find Optimal Number of Clusters
-# MAGIC 
+# MAGIC
 # MAGIC Use silhouette score to determine optimal K for K-Means.
 
 # COMMAND ----------
@@ -1214,7 +1232,7 @@ with mlflow.start_run(run_name="defect_clustering") as run:
 
 # MAGIC %md
 # MAGIC ## Analyze Clusters
-# MAGIC 
+# MAGIC
 # MAGIC Understand characteristics of each defect cluster.
 
 # COMMAND ----------
@@ -1281,10 +1299,10 @@ plt.show()
 # MAGIC ---
 # MAGIC # 💡 Model 5: Enhanced Corrective Action Recommender
 # MAGIC ---
-# MAGIC 
+# MAGIC
 # MAGIC ## Objective
 # MAGIC Recommend corrective actions based on defect patterns and historical effectiveness.
-# MAGIC 
+# MAGIC
 # MAGIC ## Enhancements
 # MAGIC - **Contextual Filtering**: Filter by plant, supplier tier, cost
 # MAGIC - **BERT Similarity**: Find similar defects when exact match fails
@@ -1298,15 +1316,16 @@ plt.show()
 
 # COMMAND ----------
 
+# DBTITLE 1,Create Action Patterns
 # Load 8D data with additional context
 eight_d_pd = eight_d_df.toPandas()
 
 # Create comprehensive action patterns with context
+# Note: Removed 'supplier_tier_lookup' as it doesn't exist in the table
 action_patterns = eight_d_pd.groupby([
     "defect_category", 
     "root_cause_category",
-    "plant_id",
-    "supplier_tier_lookup"
+    "plant_id"
 ]).agg({
     "corrective_actions": lambda x: list(x),
     "verification_result": lambda x: list(x),
@@ -1316,13 +1335,15 @@ action_patterns = eight_d_pd.groupby([
 
 # Calculate effectiveness rate and confidence interval
 def calculate_effectiveness_with_ci(results_list):
-    """Calculate effectiveness rate with 95% confidence interval."""
+    """
+    Calculate effectiveness rate with 95% confidence interval.
+    """
     if len(results_list) == 0:
-        return 0, 0, 0, 0
+        return 0, 0, 0
     
     effective_count = sum(1 for r in results_list if r == "Effective")
     total_count = len(results_list)
-    rate = effective_count / total_count
+    rate = effective_count / total_count if total_count > 0 else 0
     
     # Wilson score interval (better for small samples)
     from scipy import stats
@@ -1334,24 +1355,38 @@ def calculate_effectiveness_with_ci(results_list):
     else:
         ci_low, ci_high = 0, 0
     
-    return rate, ci_low, ci_high, total_count
+    return rate, ci_low, ci_high
 
-# Apply to each row
-action_patterns[["effectiveness_rate", "ci_low", "ci_high", "sample_size"]] = action_patterns.apply(
+# Apply to each row (returns 3 values: rate, ci_low, ci_high)
+action_patterns[["effectiveness_rate", "ci_low", "ci_high"]] = action_patterns.apply(
     lambda row: pd.Series(calculate_effectiveness_with_ci(row["verification_result"])),
     axis=1
 )
 
+# Drop verification_result and rename columns
 action_patterns.drop("verification_result", axis=1, inplace=True)
+
+# Debug: print current columns before renaming
+print(f"\n🔍 Current columns ({len(action_patterns.columns)}): {list(action_patterns.columns)}")
+
+# Rename columns to be more descriptive
 action_patterns.columns = [
-    "defect_category", "root_cause_category", "plant_id", "supplier_tier",
-    "actions", "sample_size", "avg_scrap_cost", 
-    "effectiveness_rate", "ci_low", "ci_high"
+    "defect_category", 
+    "root_cause_category", 
+    "plant_id",
+    "actions",              # was: corrective_actions
+    "sample_size",          # was: eight_d_id (count)
+    "avg_scrap_cost",       # was: total_scrap_cost (mean)
+    "effectiveness_rate",   # new column
+    "ci_low",               # new column
+    "ci_high"               # new column
 ]
 
-print(f"📊 Enhanced Action Patterns: {len(action_patterns):,} combinations")
-print(f"   With context (plant + supplier): {len(action_patterns):,}")
+print(f"\n📊 Enhanced Action Patterns: {len(action_patterns):,} combinations")
+print(f"   Grouped by: defect_category, root_cause_category, plant_id")
 print(f"   Avg actions per combination: {action_patterns['sample_size'].mean():.1f}")
+print(f"   Avg effectiveness rate: {action_patterns['effectiveness_rate'].mean():.1%}")
+print(f"   Total 8D reports analyzed: {action_patterns['sample_size'].sum():.0f}")
 
 # COMMAND ----------
 
@@ -1422,7 +1457,8 @@ def recommend_corrective_actions_enhanced(
     if plant_id:
         matches = matches[matches["plant_id"] == plant_id]
     
-    if supplier_tier:
+    # Only filter by supplier_tier if the column exists
+    if supplier_tier and "supplier_tier" in action_patterns.columns:
         matches = matches[matches["supplier_tier"] == supplier_tier]
     
     if max_cost:
@@ -1492,11 +1528,11 @@ def recommend_corrective_actions_enhanced(
             # Get a sample action (first one)
             sample_action = str(row["actions"][0])[:300]
             
-            recommendations.append({
+            # Build recommendation dict - handle missing supplier_tier gracefully
+            rec_dict = {
                 "defect_category": row["defect_category"],
                 "root_cause": row["root_cause_category"],
                 "plant": row["plant_id"],
-                "supplier_tier": row["supplier_tier"],
                 "sample_action": sample_action,
                 "effectiveness_rate": f"{row['effectiveness_rate']:.0%}",
                 "confidence_interval": f"({row['ci_low']:.0%} - {row['ci_high']:.0%})",
@@ -1505,7 +1541,13 @@ def recommend_corrective_actions_enhanced(
                 "similarity": f"{row['similarity_score']:.0%}",
                 "recommendation_score": f"{row['recommendation_score']:.2f}",
                 "match_type": "exact" if row["similarity_score"] == 1.0 else "similar"
-            })
+            }
+            
+            # Add supplier_tier only if it exists in the row
+            if "supplier_tier" in row.index and pd.notna(row["supplier_tier"]):
+                rec_dict["supplier_tier"] = row["supplier_tier"]
+            
+            recommendations.append(rec_dict)
     
     return recommendations
 
@@ -1518,61 +1560,74 @@ print("✅ Enhanced recommendation function defined")
 
 # COMMAND ----------
 
-# Test cases with various scenarios
-test_cases = [
-    # Scenario 1: Exact match with context
-    {
-        "defect_category": "Dimensional",
-        "root_cause": "Machine",
-        "plant_id": "P001",
-        "description": "Exact match with plant filter"
-    },
-    # Scenario 2: Exact match without context
-    {
-        "defect_category": "Surface Defects",
-        "root_cause": "Material",
-        "description": "Exact match, any plant/supplier"
-    },
-    # Scenario 3: Fuzzy match (typo or similar defect)
-    {
-        "defect_category": "Dimensinal Defects",  # Typo
-        "description": "Fuzzy match via BERT similarity"
-    },
-    # Scenario 4: With cost filter
-    {
-        "defect_category": "Welding Defects",
-        "root_cause": "Method",
-        "max_cost": 50000,
-        "description": "Cost-filtered recommendations"
-    }
-]
+# DBTITLE 1,Test Recommendation System
+# Load 8D data with additional context
+eight_d_pd = eight_d_df.toPandas()
 
-print("💡 ENHANCED CORRECTIVE ACTION RECOMMENDATIONS")
-print("=" * 80)
+# Print available columns for debugging
+print(f"Available columns in eight_d_pd: {list(eight_d_pd.columns)}")
 
-for i, test_case in enumerate(test_cases, 1):
-    desc = test_case.pop("description")
+# Create comprehensive action patterns with context
+# NOTE: Removed supplier_tier_lookup as it doesn't exist in this dataset
+action_patterns = eight_d_pd.groupby([
+    "defect_category", 
+    "root_cause_category",
+    "plant_id"
+]).agg({
+    "corrective_actions": lambda x: list(x),
+    "verification_result": lambda x: list(x),
+    "eight_d_id": "count",
+    "total_scrap_cost": "mean"
+}).reset_index()
+
+# Calculate effectiveness rate and confidence interval
+def calculate_effectiveness_with_ci(results_list):
+    """Calculate effectiveness rate with 95% confidence interval."""
+    if len(results_list) == 0:
+        return 0, 0, 0
     
-    print(f"\n{'='*80}")
-    print(f"TEST CASE {i}: {desc}")
-    print(f"{'='*80}")
-    print(f"Input: {test_case}")
-    print("-" * 80)
+    effective_count = sum(1 for r in results_list if r == "Effective")
+    total_count = len(results_list)
+    rate = effective_count / total_count
     
-    recs = recommend_corrective_actions_enhanced(**test_case, top_n=3)
+    # Wilson score interval (better for small samples)
+    from scipy import stats
+    if total_count > 0:
+        # Binomial proportion confidence interval
+        ci_low, ci_high = stats.binom.interval(0.95, total_count, rate)
+        ci_low = ci_low / total_count
+        ci_high = ci_high / total_count
+    else:
+        ci_low, ci_high = 0, 0
     
-    for j, rec in enumerate(recs, 1):
-        if "message" in rec:
-            print(f"   ℹ️  {rec['message']}")
-            if "suggestion" in rec:
-                print(f"      {rec['suggestion']}")
-        else:
-            print(f"\n   {j}. [{rec['match_type'].upper()}] {rec['defect_category']} | {rec['root_cause']}")
-            print(f"      Context: Plant {rec['plant']} | {rec['supplier_tier']}")
-            print(f"      Effectiveness: {rec['effectiveness_rate']} (CI: {rec['confidence_interval']})")
-            print(f"      Based on {rec['historical_cases']} cases | Avg Cost: {rec['avg_cost']}")
-            print(f"      Similarity: {rec['similarity']} | Score: {rec['recommendation_score']}")
-            print(f"      Action: {rec['sample_action'][:120]}...")
+    return rate, ci_low, ci_high
+
+# Apply to each row
+action_patterns[["effectiveness_rate", "ci_low", "ci_high"]] = action_patterns.apply(
+    lambda row: pd.Series(calculate_effectiveness_with_ci(row["verification_result"])),
+    axis=1
+)
+
+# Rename columns (including total_scrap_cost -> avg_scrap_cost)
+action_patterns.rename(columns={
+    "corrective_actions": "actions",
+    "eight_d_id": "sample_size",
+    "total_scrap_cost": "avg_scrap_cost"
+}, inplace=True)
+
+# Drop verification_result
+action_patterns.drop("verification_result", axis=1, inplace=True)
+
+# Reorder columns (without supplier_tier)
+action_patterns = action_patterns[[
+    "defect_category", "root_cause_category", "plant_id",
+    "actions", "sample_size", "avg_scrap_cost", 
+    "effectiveness_rate", "ci_low", "ci_high"
+]]
+
+print(f"📊 Enhanced Action Patterns: {len(action_patterns):,} combinations")
+print(f"   Columns: {list(action_patterns.columns)}")
+print(f"   Avg actions per combination: {action_patterns['sample_size'].mean():.1f}")
 
 # COMMAND ----------
 
@@ -1582,23 +1637,25 @@ for i, test_case in enumerate(test_cases, 1):
 # COMMAND ----------
 
 # Create schema for tracking recommendations
-recommendation_log_schema = """
-    recommendation_id STRING,
-    timestamp TIMESTAMP,
-    defect_category STRING,
-    root_cause_category STRING,
-    plant_id STRING,
-    supplier_tier STRING,
-    max_cost DOUBLE,
-    num_recommendations INT,
-    top_recommendation_action STRING,
-    top_recommendation_effectiveness DOUBLE,
-    match_type STRING,
-    user_selected BOOLEAN,
-    selected_recommendation_index INT,
-    feedback_effective BOOLEAN,
-    feedback_timestamp TIMESTAMP
-"""
+from pyspark.sql.types import StructType, StructField, StringType, TimestampType, DoubleType, IntegerType, BooleanType
+
+recommendation_log_schema = StructType([
+    StructField("recommendation_id", StringType(), True),
+    StructField("timestamp", TimestampType(), True),
+    StructField("defect_category", StringType(), True),
+    StructField("root_cause_category", StringType(), True),
+    StructField("plant_id", StringType(), True),
+    StructField("supplier_tier", StringType(), True),
+    StructField("max_cost", DoubleType(), True),
+    StructField("num_recommendations", IntegerType(), True),
+    StructField("top_recommendation_action", StringType(), True),
+    StructField("top_recommendation_effectiveness", DoubleType(), True),
+    StructField("match_type", StringType(), True),
+    StructField("user_selected", BooleanType(), True),
+    StructField("selected_recommendation_index", IntegerType(), True),
+    StructField("feedback_effective", BooleanType(), True),
+    StructField("feedback_timestamp", TimestampType(), True)
+])
 
 # Initialize empty tracking table
 tracking_df = spark.createDataFrame([], schema=recommendation_log_schema)
@@ -1679,8 +1736,8 @@ def log_recommendation(
         "feedback_timestamp": None
     }
     
-    # Append to tracking table
-    log_df = spark.createDataFrame([log_entry])
+    # Append to tracking table - use explicit schema to avoid type inference issues
+    log_df = spark.createDataFrame([log_entry], schema=recommendation_log_schema)
     log_df.write.mode("append").saveAsTable(
         f"{FULL_SCHEMA}.ml_action_recommendation_log"
     )
@@ -1710,6 +1767,8 @@ rec_id = log_recommendation(
     root_cause="Machine",
     recommendations=demo_recs,
     plant_id="P001",
+    supplier_tier=None,  # Explicitly pass None
+    max_cost=None,       # Explicitly pass None
     user_selected=True,  # Simulate user selection
     selected_index=0
 )
@@ -1729,7 +1788,7 @@ print(f"   SELECT * FROM {FULL_SCHEMA}.ml_action_recommendation_log")
 
 # MAGIC %md
 # MAGIC ## Save Anomaly Detection Results
-# MAGIC 
+# MAGIC
 # MAGIC Save both Isolation Forest and Time Series anomaly results.
 
 # COMMAND ----------
@@ -1766,7 +1825,8 @@ anomaly_spark = (
     )
 )
 
-anomaly_spark.write.mode("overwrite").saveAsTable(
+# Add overwriteSchema option to replace the old table schema
+anomaly_spark.write.mode("overwrite").option("overwriteSchema", "true").saveAsTable(
     f"{FULL_SCHEMA}.ml_scrap_anomalies"
 )
 print(f"✅ Saved anomaly results: {anomaly_spark.count():,} days")
@@ -1886,9 +1946,9 @@ print("""
 # MAGIC ---
 # MAGIC # 🏢 Model 6: Supplier Reallocation Optimizer
 # MAGIC ---
-# MAGIC 
+# MAGIC
 # MAGIC **Purpose**: Optimize supplier allocation to minimize scrap while respecting capacity constraints.
-# MAGIC 
+# MAGIC
 # MAGIC This model supports the **What-If Scenarios** in the Streamlit app by:
 # MAGIC 1. Identifying optimal suppliers for each part category
 # MAGIC 2. Predicting scrap impact of supplier changes
@@ -1927,7 +1987,7 @@ print(f"Supplier history records: {supplier_scrap_history.count()}")
 
 # MAGIC %md
 # MAGIC ## Train Scrap Prediction Model for Supplier Changes
-# MAGIC 
+# MAGIC
 # MAGIC **Goal**: Predict expected scrap cost change when reallocating volume between suppliers.
 
 # COMMAND ----------
@@ -2000,7 +2060,7 @@ with mlflow.start_run(run_name="supplier_scrap_predictor"):
 
 # MAGIC %md
 # MAGIC ## Generate Supplier Reallocation Recommendations
-# MAGIC 
+# MAGIC
 # MAGIC For each specialization/category, identify optimal supplier and potential reallocations.
 
 # COMMAND ----------
@@ -2080,7 +2140,7 @@ if len(recommendations_df) > 0:
 
 # MAGIC %md
 # MAGIC ## Create Supplier-Part Allocation Matrix
-# MAGIC 
+# MAGIC
 # MAGIC For use in what-if scenario analysis - shows which suppliers can produce which parts.
 
 # COMMAND ----------

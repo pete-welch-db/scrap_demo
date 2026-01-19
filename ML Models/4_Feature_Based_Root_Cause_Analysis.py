@@ -492,8 +492,8 @@ importance_spark_df = spark.createDataFrame(avg_importance.assign(
     total_records=total_records
 ))
 
-# Save to Delta table
-importance_spark_df.write.mode("overwrite").saveAsTable(f"{FULL_SCHEMA}.ml_feature_importance_scores")
+# Save to Delta table with schema overwrite
+importance_spark_df.write.mode("overwrite").option("overwriteSchema", "true").saveAsTable(f"{FULL_SCHEMA}.ml_feature_importance_scores")
 print(f"✅ Saved feature importance to {FULL_SCHEMA}.ml_feature_importance_scores")
 
 # COMMAND ----------
