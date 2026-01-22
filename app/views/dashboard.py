@@ -487,7 +487,7 @@ def render_dashboard_page():
         forecast_df['forecast_date'] = pd.to_datetime(forecast_df['forecast_date'])
         
         # Forecast chart first
-        st.plotly_chart(plot_forecast(forecast_df), width='stretch', key="forecast_chart")
+        st.plotly_chart(plot_forecast(forecast_df), use_container_width=True, key="forecast_chart")
         
         # Key metrics
         col1, col2, col3, col4 = st.columns(4)
@@ -556,14 +556,14 @@ def render_dashboard_page():
             st.metric("🔴 Critical", risk_counts.get('Critical', 0))
         
         # Risk scatter plot
-        st.plotly_chart(plot_supplier_risk(risk_df), width='stretch')
+        st.plotly_chart(plot_supplier_risk(risk_df), use_container_width=True)
         
         # Detailed table
         st.markdown("#### 📊 Supplier Risk Details")
         st.dataframe(
             risk_df[['supplier_name', 'tier', 'quality_score', 'delivery_score', 
                     'overall_risk_score', 'risk_category', 'recommendation']],
-            width='stretch',
+            use_container_width=True,
             hide_index=True
         )
     
@@ -642,7 +642,7 @@ def render_dashboard_page():
             ),
             showlegend=False
         )
-        st.plotly_chart(fig, width='stretch', key="anomaly_chart")
+        st.plotly_chart(fig, use_container_width=True, key="anomaly_chart")
         
         # Anomaly breakdown by Plant and Defect Category
         col_left, col_right = st.columns(2)
@@ -653,7 +653,7 @@ def render_dashboard_page():
                 'total_scrap_cost': 'sum',
                 'anomaly_score': 'count'
             }).rename(columns={'anomaly_score': 'count'}).sort_values('total_scrap_cost', ascending=False)
-            st.dataframe(plant_summary, width='stretch')
+            st.dataframe(plant_summary, use_container_width=True)
         
         with col_right:
             st.markdown("#### By Defect Category")
@@ -662,7 +662,7 @@ def render_dashboard_page():
                     'total_scrap_cost': 'sum',
                     'anomaly_score': 'count'
                 }).rename(columns={'anomaly_score': 'count'}).sort_values('total_scrap_cost', ascending=False)
-                st.dataframe(defect_summary, width='stretch')
+                st.dataframe(defect_summary, use_container_width=True)
             else:
                 st.info("Defect category data not available")
         
@@ -675,7 +675,7 @@ def render_dashboard_page():
             display_df['total_scrap_cost'] = display_df['total_scrap_cost'].apply(lambda x: f"${x:,.0f}")
             display_df['anomaly_score'] = display_df['anomaly_score'].apply(lambda x: f"{x:.2f}")
             display_df.columns = ['Date', 'Plant', 'Scrap Cost', 'Qty', 'Score', 'Reason']
-            st.dataframe(display_df, width='stretch', hide_index=True)
+            st.dataframe(display_df, use_container_width=True, hide_index=True)
     
     # =========================================================================
     # TAB 5: ROOT CAUSE VALIDATION
@@ -754,7 +754,7 @@ def render_dashboard_page():
                 ),
                 showlegend=False
             )
-            st.plotly_chart(fig, width='stretch', key="root_cause_chart")
+            st.plotly_chart(fig, use_container_width=True, key="root_cause_chart")
         
         # Cases to review
         with st.expander("🔍 Cases to Review (All Disagreements)"):
@@ -766,6 +766,6 @@ def render_dashboard_page():
                 review_display['prediction_confidence'] = review_display['prediction_confidence'].apply(lambda x: f"{x:.1%}")
                 review_display['total_scrap_cost'] = review_display['total_scrap_cost'].apply(lambda x: f"${x:,.0f}")
                 review_display.columns = ['Defect', 'Actual Root Cause', 'ML Prediction', 'Confidence', 'Cost']
-                st.dataframe(review_display, width='stretch', hide_index=True)
+                st.dataframe(review_display, use_container_width=True, hide_index=True)
             else:
                 st.info("No high-confidence disagreements found.")

@@ -718,7 +718,7 @@ def render_supplier_scenario(suppliers_df: pd.DataFrame):
                 )
             )
             
-            st.plotly_chart(fig, width='stretch', key="supplier_quality_chart")
+            st.plotly_chart(fig, use_container_width=True, key="supplier_quality_chart")
             
             # Detailed alternatives table
             st.markdown("##### Available Capacity & Details")
@@ -730,7 +730,7 @@ def render_supplier_scenario(suppliers_df: pd.DataFrame):
             alt_display['unit_cost_index'] = alt_display['unit_cost_index'].apply(lambda x: f"{x:.2f}x")
             alt_display.columns = ['Supplier', 'Tier', 'Quality', 'Available Cap.', 'Risk', 'Cost Index']
             
-            st.dataframe(alt_display, width='stretch', hide_index=True)
+            st.dataframe(alt_display, use_container_width=True, hide_index=True)
             
             # Reallocation recommendation
             if spend_action == "Reduce Spend" and len(alternatives) > 0:
@@ -823,7 +823,7 @@ def render_supplier_scenario(suppliers_df: pd.DataFrame):
             )
         )
         
-        st.plotly_chart(fig2, width='stretch', key="supplier_scatter_chart")
+        st.plotly_chart(fig2, use_container_width=True, key="supplier_scatter_chart")
 
 
 # =============================================================================
@@ -1280,7 +1280,7 @@ def render_plant_scenario(monthly_df: pd.DataFrame, plants: list):
             )
         )
         
-        st.plotly_chart(fig, width='stretch', key="plant_trajectory_chart")
+        st.plotly_chart(fig, use_container_width=True, key="plant_trajectory_chart")
         
         roi_pct = ((annual_savings * 5) / investment - 1) * 100 if investment > 0 else 0
         benefit_color = "#10b981" if five_year_savings > 0 else "#ef4444"
@@ -1426,7 +1426,7 @@ def render_work_center_scenario(wc_df: pd.DataFrame, work_centers: list):
         
         fig.update_traces(marker=dict(line=dict(width=1, color='white')))
         
-        st.plotly_chart(fig, width='stretch', key="wc_scatter_chart")
+        st.plotly_chart(fig, use_container_width=True, key="wc_scatter_chart")
 
 
 def render_part_scenario(parts_df: pd.DataFrame):
@@ -1594,7 +1594,7 @@ def render_part_scenario(parts_df: pd.DataFrame):
                 )
             )
             
-            st.plotly_chart(fig, width='stretch', key="part_bar_chart")
+            st.plotly_chart(fig, use_container_width=True, key="part_bar_chart")
             
             st.markdown("#### Part Details")
             display_df = selected_data[['part_id', 'part_name', 'monthly_scrap_cost', 
@@ -1604,6 +1604,6 @@ def render_part_scenario(parts_df: pd.DataFrame):
             display_df['unit_cost'] = display_df['unit_cost'].apply(lambda x: f"${x:.2f}")
             display_df.columns = ['Part ID', 'Part Name', 'Monthly Scrap', 'Defect Rate', 'Unit Cost']
             
-            st.dataframe(display_df, width='stretch', hide_index=True)
+            st.dataframe(display_df, use_container_width=True, hide_index=True)
         else:
             st.info("👆 Select one or more parts to analyze")
