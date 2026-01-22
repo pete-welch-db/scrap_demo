@@ -266,6 +266,18 @@ def apply_custom_styles():
             border-radius: 8px;
         }
         
+        /* Chat input text color - fix white text on white background */
+        .stChatInput > div > div > input,
+        .stChatInput textarea {
+            color: var(--text-primary) !important;
+            background: var(--bg-card) !important;
+        }
+        
+        .stChatInput > div > div > input::placeholder,
+        .stChatInput textarea::placeholder {
+            color: var(--text-muted) !important;
+        }
+        
         /* Position chat input above footer and style container */
         [data-testid="stChatInput"] {
             bottom: 60px !important;
