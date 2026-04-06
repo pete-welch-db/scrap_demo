@@ -97,11 +97,11 @@ def load_eight_d_reports() -> Optional[pd.DataFrame]:
 def get_kpi_summary() -> dict:
     """Get current KPI values for dashboard."""
     query = f"""
-    SELECT 
-        SUM(total_scrap_cost) as ytd_scrap_cost,
-        SUM(total_quantity_scrapped) as ytd_units_scrapped
-    FROM {SCHEMA}.scrap_daily_summary_gold
-    WHERE transaction_year = YEAR(CURRENT_DATE())
+    SELECT
+        MEASURE(`YTD Scrap Cost`) as ytd_scrap_cost,
+        MEASURE(`YTD Units Scrapped`) as ytd_units_scrapped
+    FROM {SCHEMA}.scrap_operations_metrics
+    WHERE `Transaction Year` = YEAR(CURRENT_DATE())
     """
     result = run_query(query)
     

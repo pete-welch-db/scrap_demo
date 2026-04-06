@@ -22,7 +22,7 @@ env:
   - name: GENIE_SPACE_ID
     value: "01f0ee7c90c9160b80fd7567dc1e3fca"
   - name: DASHBOARD_EMBED_URL
-    value: "https://fe-vm-industry-solutions-buildathon.cloud.databricks.com/embed/dashboardsv3/01f0f2f3a9291b8995a13619abf2528e?o=237438879023004"
+    value: "https://fe-vm-industry-solutions-buildathon.cloud.databricks.com/embed/dashboardsv3/01f12de4304e1749a624a5c3b218b708?o=237438879023004"
 
 # Environment variables are automatically set by Databricks Apps runtime
 # (DATABRICKS_HOST, DATABRICKS_TOKEN, DATABRICKS_WAREHOUSE_ID)

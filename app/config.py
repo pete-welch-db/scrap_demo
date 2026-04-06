@@ -46,7 +46,11 @@ class DatabricksConfig:
     
     def is_configured(self) -> bool:
         """Check if essential configuration is present."""
-        return bool(self.host and self.token)
+        import os
+        # In DBX mode, auth uses OAuth M2M (client_id/secret), not a token
+        has_token = bool(self.token)
+        has_oauth = bool(os.getenv("DATABRICKS_CLIENT_ID") and os.getenv("DATABRICKS_CLIENT_SECRET"))
+        return bool(self.host and (has_token or has_oauth))
 
 
 @dataclass

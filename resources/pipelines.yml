@@ -58,8 +58,4 @@ resources:
         - level: CAN_MANAGE
           user_name: ${workspace.current_user.userName}
         - level: CAN_MANAGE
-          user_name: noah.soprala@databricks.com
-        - level: CAN_MANAGE
           user_name: pete.welch@databricks.com
-        - level: CAN_MANAGE
-          user_name: zachary.ryan@databricks.com

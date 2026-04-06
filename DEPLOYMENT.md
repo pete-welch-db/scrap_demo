@@ -69,7 +69,7 @@ scrap_demo/
 
 | Target | Catalog | Schema | Usage |
 |--------|---------|--------|-------|
-| `dev` | `scrap_catalog` | `scrap_demo` | Development/testing (default) |
+| `dev` | `scrap` | `scrap_demo` | Development/testing (default) |
 
 > **Note**: Staging and prod targets are commented out in `databricks.yml`. Uncomment and configure them as needed.
 

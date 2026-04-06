@@ -112,7 +112,7 @@ The app will open at `http://localhost:8501`
 | `DATABRICKS_HTTP_PATH` | SQL Warehouse path | `/sql/1.0/warehouses/288a7ec183eea397` |
 | `DATABRICKS_TOKEN` | Access token | (from .env) |
 | `DASHBOARD_EMBED_URL` | Dashboard iframe URL | (pre-configured) |
-| `DATABRICKS_CATALOG` | Unity Catalog name | `scrap_catalog` |
+| `DATABRICKS_CATALOG` | Unity Catalog name | `scrap` |
 | `DATABRICKS_SCHEMA` | Schema name | `scrap_demo` |
 | `GENIE_SPACE_ID` | Genie Space ID | (optional) |
 

@@ -62,12 +62,13 @@ def render_chat_interface():
                 "role": "assistant",
                 "content": f"""👋 Hello! I'm connected to **{genie_config.space_name}** via the Databricks Genie API.
 
-I can query your scrap data directly. Try asking:
+I can query your scrap data directly using governed metric definitions. Try asking:
 
-• "What's our total scrap cost this year?"
-• "Show me the top 5 plants by scrap cost"
-• "Which suppliers have quality scores below 0.85?"
-• "Compare defect rates across all shifts"
+• "What's our YTD scrap cost broken down by plant?"
+• "Which defect categories are driving the most cost this year?"
+• "Show me supplier quality scores by tier"
+• "How many 8D reports are open vs closed?"
+• "Compare scrap cost trends month over month"
 
 Ask me anything about your scrap data!""",
                 "type": "intro"
@@ -103,11 +104,11 @@ Ask me anything about your scrap data!""",
         st.markdown("##### ⚡ Quick Questions")
         
         quick_questions = [
-            ("📊 YTD Summary", "What's our total scrap cost year to date?"),
-            ("🏭 Plant Ranking", "Show the top 5 plants by scrap cost this year"),
-            ("📦 Top Defects", "What are the top 5 defect types by cost?"),
-            ("👥 Supplier Issues", "Which suppliers have the highest scrap rates?"),
-            ("📋 8D Reports", "How many 8D reports are currently open?"),
+            ("📊 YTD by Plant", "What's our YTD scrap cost broken down by plant?"),
+            ("🏭 Cost Trends", "Show monthly scrap cost trends for the last 12 months"),
+            ("📦 Top Defects", "Which defect categories are driving the most scrap cost this year?"),
+            ("👥 Supplier Quality", "Show average supplier quality scores by tier"),
+            ("📋 8D Status", "What's the current 8D report closure rate by priority?"),
         ]
         
         cols = st.columns(5)

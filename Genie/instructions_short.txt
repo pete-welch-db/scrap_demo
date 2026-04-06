@@ -10,15 +10,23 @@ For summaries and totals, ALWAYS use the Gold tables (already aggregated):
 
 Only use `scrap_transactions_silver` for detailed drill-downs or filtering.
 
-## SQL Formatting
-For dollar values:
+## SQL Formatting (MANDATORY - NEVER SKIP)
+**EVERY cost/dollar column MUST be formatted. Returning raw decimals like 3688026.27 is NEVER acceptable.**
+
+For dollar values (ANY column with cost, price, or dollar):
 ```sql
-FORMAT_NUMBER(total_scrap_cost, '$#,##0.00') AS `Scrap Cost`
+FORMAT_NUMBER(ROUND(total_scrap_cost, 2), '$#,##0.00') AS `Scrap Cost`
+FORMAT_NUMBER(ROUND(SUM(total_scrap_cost), 2), '$#,##0.00') AS `Total Cost`
 ```
 
 For percentages:
 ```sql
 CONCAT(ROUND(supplier_quality_score * 100, 1), '%') AS `Quality`
+```
+
+For large counts:
+```sql
+FORMAT_NUMBER(SUM(quantity_scrapped), '#,##0') AS `Total Scrapped`
 ```
 
 **NEVER re-aggregate already aggregated columns.** Gold tables have pre-computed totals.

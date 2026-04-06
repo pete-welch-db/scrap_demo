@@ -119,28 +119,37 @@ def get_live_kpis() -> dict:
     from config import databricks_config
     
     schema = f"{databricks_config.catalog}.{databricks_config.schema}"
-    
+
     try:
-        # Query for YTD scrap metrics
+        # Query for YTD scrap metrics via metric view
         scrap_query = f"""
-        SELECT 
-            COALESCE(SUM(total_scrap_cost), 0) as ytd_scrap_cost,
-            COALESCE(SUM(total_quantity_scrapped), 0) as ytd_units_scrapped,
-            COALESCE(COUNT(*), 0) as scrap_incidents
-        FROM {schema}.scrap_daily_summary_gold
-        WHERE transaction_year = YEAR(CURRENT_DATE())
+        SELECT
+            COALESCE(MEASURE(`YTD Scrap Cost`), 0) as ytd_scrap_cost,
+            COALESCE(MEASURE(`YTD Units Scrapped`), 0) as ytd_units_scrapped,
+            COALESCE(MEASURE(`Scrap Incidents`), 0) as scrap_incidents
+        FROM {schema}.scrap_operations_metrics
+        WHERE `Transaction Year` = YEAR(CURRENT_DATE())
         """
-        
+
         scrap_result = run_query(scrap_query)
-        
-        # Query for open 8D reports
+
+        # Query for open 8D reports via metric view
         eight_d_query = f"""
-        SELECT COUNT(*) as open_8d_reports
-        FROM {schema}.eight_d_reports_silver
-        WHERE status IN ('Open', 'In Progress', 'Pending Verification')
+        SELECT
+            COALESCE(MEASURE(`Open Reports`), 0) as open_8d_reports
+        FROM {schema}.eight_d_quality_metrics
         """
-        
+
         eight_d_result = run_query(eight_d_query)
+
+        # Query for avg supplier quality score via metric view
+        supplier_query = f"""
+        SELECT
+            COALESCE(MEASURE(`Avg Quality Score`), 0) as avg_quality_score
+        FROM {schema}.supplier_quality_metrics
+        """
+
+        supplier_result = run_query(supplier_query)
         
         if scrap_result is not None and len(scrap_result) > 0:
             kpis = {
@@ -148,6 +157,7 @@ def get_live_kpis() -> dict:
                 "ytd_units_scrapped": float(scrap_result.iloc[0]["ytd_units_scrapped"]),
                 "scrap_incidents": int(scrap_result.iloc[0]["scrap_incidents"]),
                 "open_8d_reports": int(eight_d_result.iloc[0]["open_8d_reports"]) if eight_d_result is not None else 0,
+                "avg_quality_score": float(supplier_result.iloc[0]["avg_quality_score"]) if supplier_result is not None else 0,
                 "ytd_scrap_delta": -8.3,  # Would need prior year comparison
                 "units_delta": -12.1,
                 "incidents_delta": -5.2,

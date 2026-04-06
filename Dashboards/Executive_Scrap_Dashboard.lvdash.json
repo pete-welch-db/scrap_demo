@@ -4,35 +4,35 @@
       "name": "ytd_kpis",
       "displayName": "YTD KPIs",
       "queryLines": [
-        "SELECT ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost, ROUND(SUM(total_qty_scrapped), 0) as total_qty_scrapped FROM scrap_catalog.scrap_demo.kpi_dashboard_gold WHERE year = YEAR(CURRENT_DATE())"
+        "SELECT MEASURE(`YTD Scrap Cost`) as total_scrap_cost, MEASURE(`YTD Units Scrapped`) as total_qty_scrapped FROM scrap_catalog.scrap_demo.scrap_operations_metrics"
       ]
     },
     {
       "name": "eight_d_status",
       "displayName": "8D Status",
       "queryLines": [
-        "SELECT * FROM scrap_catalog.scrap_demo.eight_d_reports_silver WHERE status = 'Open'"
+        "SELECT MEASURE(`Open Reports`) as open_count FROM scrap_catalog.scrap_demo.eight_d_quality_metrics"
       ]
     },
     {
       "name": "supplier_quality_avg",
       "displayName": "Supplier Quality Average",
       "queryLines": [
-        "SELECT ROUND(AVG(supplier_quality_score) * 100, 1) as avg_quality FROM scrap_catalog.scrap_demo.scrap_transactions_silver WHERE transaction_year = YEAR(CURRENT_DATE())"
+        "SELECT MEASURE(`Avg Quality Score`) as avg_quality FROM scrap_catalog.scrap_demo.supplier_quality_metrics"
       ]
     },
     {
       "name": "monthly_trend",
       "displayName": "Monthly Scrap Trend",
       "queryLines": [
-        "SELECT year_month, transaction_year as year, ROUND(total_scrap_cost, 2) as total_scrap_cost, total_quantity_scrapped FROM scrap_catalog.scrap_demo.scrap_monthly_summary_gold ORDER BY year_month"
+        "SELECT `Transaction Month` as year_month, `Transaction Year` as year, MEASURE(`Total Scrap Cost`) as total_scrap_cost, MEASURE(`Total Units Scrapped`) as total_quantity_scrapped FROM scrap_catalog.scrap_demo.scrap_operations_metrics GROUP BY `Transaction Month`, `Transaction Year` ORDER BY year_month"
       ]
     },
     {
       "name": "plant_ytd_summary",
       "displayName": "Plant YTD Summary",
       "queryLines": [
-        "SELECT plant_name_lookup as plant, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM scrap_catalog.scrap_demo.scrap_by_plant_gold WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY plant_name_lookup"
+        "SELECT `Plant` as plant, MEASURE(`YTD Scrap Cost`) as total_scrap_cost FROM scrap_catalog.scrap_demo.scrap_operations_metrics GROUP BY `Plant`"
       ]
     },
     {
@@ -345,11 +345,11 @@
                   "datasetName": "eight_d_status",
                   "fields": [
                     {
-                      "name": "count(*)",
-                      "expression": "COUNT(`*`)"
+                      "name": "open_count",
+                      "expression": "`open_count`"
                     }
                   ],
-                  "disaggregated": false
+                  "disaggregated": true
                 }
               }
             ],
@@ -358,7 +358,7 @@
               "widgetType": "counter",
               "encodings": {
                 "value": {
-                  "fieldName": "count(*)",
+                  "fieldName": "open_count",
                   "displayName": "Open"
                 }
               },

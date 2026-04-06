@@ -29,12 +29,8 @@ resources:
         - level: CAN_MANAGE
           user_name: ${workspace.current_user.userName}
         - level: CAN_MANAGE
-          user_name: noah.soprala@databricks.com
-        - level: CAN_MANAGE
           user_name: pete.welch@databricks.com
-        - level: CAN_MANAGE
-          user_name: zachary.ryan@databricks.com
-      
+
       # Define serverless environment
       environments:
         - environment_key: default
@@ -81,11 +77,7 @@ resources:
         - level: CAN_MANAGE
           user_name: ${workspace.current_user.userName}
         - level: CAN_MANAGE
-          user_name: noah.soprala@databricks.com
-        - level: CAN_MANAGE
           user_name: pete.welch@databricks.com
-        - level: CAN_MANAGE
-          user_name: zachary.ryan@databricks.com
       # Define serverless environment for ML tasks
       environments:
         - environment_key: ml
@@ -104,11 +96,23 @@ resources:
             pipeline_id: ${resources.pipelines.scrap_dlt_pipeline.id}
             full_refresh: false
 
+        # Create UC Metric Views (after DLT creates tables)
+        - task_key: create_metric_views
+          description: Create UC metric views for governed KPI definitions
+          depends_on:
+            - task_key: run_dlt_pipeline
+          notebook_task:
+            notebook_path: ../Setup and Bronze Create/3_Create_Metric_Views.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+          environment_key: ml
+
         # ML Training (after DLT)
         - task_key: scrap_forecasting
           description: Train Prophet time series models for scrap forecasting
           depends_on:
-            - task_key: run_dlt_pipeline
+            - task_key: create_metric_views
           notebook_task:
             notebook_path: ../ML Models/1_Scrap_Forecasting.py
             base_parameters:
@@ -147,5 +151,17 @@ resources:
             base_parameters:
               catalog: ${var.catalog}
               schema: ${var.schema}
+          environment_key: ml
+
+        # Dashboard Refresh (after all ML tasks)
+        - task_key: refresh_dashboard
+          description: Publish dashboard to refresh cached data
+          depends_on:
+            - task_key: feature_root_cause
+          notebook_task:
+            notebook_path: ../Setup and Bronze Create/2_Refresh_Dashboard.py
+            base_parameters:
+              dashboard_id: ${resources.dashboards.executive_scrap_dashboard.id}
+              warehouse_id: ${var.warehouse_id}
           environment_key: ml
 

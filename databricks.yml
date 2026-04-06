@@ -51,18 +51,18 @@ targets:
   azure:
     mode: development
     variables:
-      catalog: welch
+      catalog: scrap_catalog
       schema: scrap_demo
     workspace:
       host: https://adb-984752964297111.11.azuredatabricks.net
       profile: azure
-      root_path: /Workspace/Users/noah.soprala@databricks.com/apps/nsoprala-scrap-demo
+      root_path: /Workspace/Users/pete.welch@databricks.com/.bundle/${bundle.name}
 
   # Staging environment  
   # staging:
   #   mode: development
   #   variables:
-  #     catalog: scrap_catalog_staging
+  #     catalog: scrap_catalog
   #     schema: scrap_demo_staging
   #   run_as:
   #     user_name: ${workspace.current_user.userName}
@@ -71,8 +71,8 @@ targets:
   # prod:
   #   mode: production
   #   variables:
-  #     catalog: scrap_catalog_prod
-  #     schema: scrap_demo_prod
+  #     catalog: scrap_catalog
+  #     schema: scrap_demo
   #     service_principal_name: scrap-platform-prod-sp
   #   
   #   # Run jobs/apps as service principal (not user)

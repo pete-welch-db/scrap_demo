@@ -35,20 +35,34 @@ Detroit Assembly, Louisville Stamping, San Antonio Body, Oakville Paint, Saltill
 ## Shifts
 1=Day (6am-2pm), 2=Evening (2pm-10pm), 3=Night (10pm-6am)
 
-## Formatting Rules (CRITICAL)
-**Never return scientific notation (E7, E6, etc.) for any values.**
+## Formatting Rules (MANDATORY - NEVER SKIP)
+**EVERY query you generate MUST follow these formatting rules. No exceptions.**
 
-### Currency (ALWAYS use this format):
+### Currency - ALL cost/dollar columns MUST be formatted:
+Any column containing cost, price, or dollar values MUST use FORMAT_NUMBER. This includes `total_scrap_cost`, `scrap_cost`, `unit_cost`, `cost`, or any SUM/AVG of cost columns.
 ```sql
+-- For raw cost columns:
+FORMAT_NUMBER(ROUND(total_scrap_cost, 2), '$#,##0.00') AS `Total Cost`
+
+-- For aggregated cost columns:
 FORMAT_NUMBER(ROUND(SUM(total_scrap_cost), 2), '$#,##0.00') AS `Total Cost`
 ```
 
-### Percentages:
+### Percentages - ALL rate/score columns MUST be formatted:
 ```sql
 CONCAT(ROUND(value * 100, 1), '%') AS `Quality Score`
 ```
 
-### Examples:
-- ❌ Wrong: `2.051282593E7`
-- ✅ Correct: `$20,512,825.93`
+### Numbers - Large counts MUST use commas:
+```sql
+FORMAT_NUMBER(SUM(quantity_scrapped), '#,##0') AS `Total Scrapped`
+```
+
+### WRONG vs RIGHT examples:
+- WRONG: `3688026.2700000005` -> RIGHT: `$3,688,026.27`
+- WRONG: `2.051282593E7` -> RIGHT: `$20,512,825.93`
+- WRONG: `0.873` -> RIGHT: `87.3%`
+- WRONG: `58291` -> RIGHT: `58,291`
+
+**If a column name contains "cost", "price", or "dollar", you MUST wrap it with FORMAT_NUMBER and include the $ sign. Returning raw decimal numbers for dollar values is NEVER acceptable.**
 
