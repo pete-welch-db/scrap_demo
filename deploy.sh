@@ -99,11 +99,26 @@ else
 
   if [[ "${SKIP_UC_GRANTS:-}" != "1" ]]; then
     echo ""
+    echo "🏭 Ensuring SQL warehouse is running (app + grants need an active warehouse)..."
+    databricks warehouses start "$WID" -t "$TARGET" --timeout 15m || true
+    echo ""
     echo "🔐 Stage 5: UC grants for app service principal (${APP_NAME})..."
-    python3 scripts/grant_app_uc_access.py --target "$TARGET" || {
-      echo "WARNING: grant_app_uc_access.py failed (insufficient GRANT rights or API). Run manually:" >&2
-      echo "  python3 scripts/grant_app_uc_access.py --target $TARGET" >&2
-    }
+    PROFILE="$(python3 scripts/bundle_paths.py --target "$TARGET" profile)"
+    if [[ -n "$PROFILE" ]]; then
+      python3 scripts/grant_app_uc_access.py --target "$TARGET" --profile "$PROFILE" || {
+        echo "WARNING: grant_app_uc_access.py failed (re-auth: databricks auth login -p $PROFILE, or insufficient GRANT)." >&2
+        echo "  python3 scripts/grant_app_uc_access.py --target $TARGET --profile $PROFILE" >&2
+      }
+      python3 scripts/check_app_warehouse_access.py --target "$TARGET" --profile "$PROFILE" || {
+        echo "WARNING: App service principal may be missing CAN USE on the SQL warehouse (add in UI or redeploy bundle)." >&2
+      }
+    else
+      python3 scripts/grant_app_uc_access.py --target "$TARGET" || {
+        echo "WARNING: grant_app_uc_access.py failed (set bundle workspace profile in databricks.yml, or run with --profile)." >&2
+        echo "  python3 scripts/grant_app_uc_access.py --target $TARGET --profile <profile>" >&2
+      }
+      python3 scripts/check_app_warehouse_access.py --target "$TARGET" || true
+    fi
   fi
 fi
 

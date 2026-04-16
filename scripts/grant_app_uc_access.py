@@ -3,13 +3,18 @@
 Grant Unity Catalog privileges to a Databricks App's service principal so SQL and Genie can read tables.
 
 Genie **space** access for the app identity is granted by the bundle `genie_space` app resource
-(permission CAN_RUN), not by UC SQL. This script only applies SELECT/USAGE on the UC schema.
+(permission CAN_RUN), not by UC SQL. This script applies **USE SCHEMA** and **SELECT ON SCHEMA**
+for the app’s ``service_principal_client_id`` (required for UC to resolve the principal).
 
 Run after the app resource exists (bundle deploy) and tables exist (pipeline job). Requires the caller's
 identity to have GRANT on the catalog/schema (e.g. schema owner or metastore admin).
 
 Usage:
   python3 scripts/grant_app_uc_access.py --target sandbox
+  python3 scripts/grant_app_uc_access.py --target sandbox --profile fe-sandbox-scrapdemo
+
+  If Statement Execution fails with token errors, re-auth: ``databricks auth login -p <profile>``
+  and/or set ``DATABRICKS_CONFIG_PROFILE`` to match your bundle workspace profile (see databricks.yml).
 """
 from __future__ import annotations
 
@@ -21,19 +26,20 @@ import time
 from typing import Any
 
 
-def _bundle_var(target: str, key: str) -> str:
-    out = subprocess.check_output(
-        [
-            "databricks",
-            "bundle",
-            "summary",
-            "--target",
-            target,
-            "-o",
-            "json",
-        ],
-        text=True,
-    )
+def _databricks_prefix(profile: str | None) -> list[str]:
+    return ["databricks", "-p", profile] if profile else ["databricks"]
+
+
+def _bundle_var(target: str, key: str, profile: str | None) -> str:
+    cmd = _databricks_prefix(profile) + [
+        "bundle",
+        "summary",
+        "--target",
+        target,
+        "-o",
+        "json",
+    ]
+    out = subprocess.check_output(cmd, text=True)
     data = json.loads(out)
     v = (data.get("variables") or {}).get(key) or {}
     return str(v.get("value") or "").strip()
@@ -44,7 +50,7 @@ def _cli_json(cmd: list[str]) -> dict[str, Any]:
     return json.loads(out) if out.strip() else {}
 
 
-def _statement_final_state(target: str, data: dict[str, Any]) -> dict[str, Any]:
+def _statement_final_state(target: str, data: dict[str, Any], profile: str | None) -> dict[str, Any]:
     """Poll until the SQL statement finishes (Statement Execution API may return PENDING)."""
     sid = data.get("statement_id")
     state = (data.get("status") or {}).get("state") or ""
@@ -55,8 +61,8 @@ def _statement_final_state(target: str, data: dict[str, Any]) -> dict[str, Any]:
             break
         time.sleep(2)
         out = subprocess.check_output(
-            [
-                "databricks",
+            _databricks_prefix(profile)
+            + [
                 "api",
                 "get",
                 f"/api/2.0/sql/statements/{sid}",
@@ -72,7 +78,9 @@ def _statement_final_state(target: str, data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
-def _run_sql_statement(target: str, warehouse_id: str, statement: str) -> None:
+def _run_sql_statement(
+    target: str, warehouse_id: str, statement: str, profile: str | None
+) -> None:
     body = {
         "warehouse_id": warehouse_id,
         "statement": statement,
@@ -80,8 +88,8 @@ def _run_sql_statement(target: str, warehouse_id: str, statement: str) -> None:
         "on_wait_timeout": "CONTINUE",
     }
     out = subprocess.check_output(
-        [
-            "databricks",
+        _databricks_prefix(profile)
+        + [
             "api",
             "post",
             "/api/2.0/sql/statements",
@@ -95,7 +103,7 @@ def _run_sql_statement(target: str, warehouse_id: str, statement: str) -> None:
         text=True,
     )
     data = json.loads(out) if out.strip() else {}
-    data = _statement_final_state(target, data)
+    data = _statement_final_state(target, data, profile)
     state = (data.get("status") or {}).get("state") or ""
     if state != "SUCCEEDED":
         err = (data.get("status") or {}).get("error") or data
@@ -105,13 +113,19 @@ def _run_sql_statement(target: str, warehouse_id: str, statement: str) -> None:
 def main() -> int:
     p = argparse.ArgumentParser(description="UC grants for app service principal")
     p.add_argument("--target", required=True, help="Bundle target (e.g. sandbox)")
+    p.add_argument(
+        "--profile",
+        default=None,
+        help="Databricks CLI profile (same as databricks.yml workspace profile)",
+    )
     args = p.parse_args()
     target = args.target
+    profile = args.profile
     app_name = f"scrap-reduction-{target}"
 
-    catalog = _bundle_var(target, "catalog")
-    schema = _bundle_var(target, "schema")
-    warehouse_id = _bundle_var(target, "warehouse_id")
+    catalog = _bundle_var(target, "catalog", profile)
+    schema = _bundle_var(target, "schema", profile)
+    warehouse_id = _bundle_var(target, "warehouse_id", profile)
     if not catalog or not schema or not warehouse_id:
         print(
             "ERROR: Missing catalog, schema, or warehouse_id from bundle summary.",
@@ -121,30 +135,32 @@ def main() -> int:
 
     try:
         app = _cli_json(
-            ["databricks", "apps", "get", app_name, "-t", target, "-o", "json"]
+            _databricks_prefix(profile)
+            + ["apps", "get", app_name, "-t", target, "-o", "json"]
         )
     except subprocess.CalledProcessError as e:
         print(f"ERROR: databricks apps get failed: {e}", file=sys.stderr)
         return 1
 
-    principal = (app.get("service_principal_name") or "").strip()
+    # Unity Catalog resolves the app identity by service_principal_client_id (UUID), not
+    # service_principal_name (display names with spaces often fail with PRINCIPAL_DOES_NOT_EXIST).
+    principal = (app.get("service_principal_client_id") or "").strip()
     if not principal:
         print(
-            "ERROR: App JSON has no service_principal_name; redeploy the app or check API version.",
+            "ERROR: App JSON has no service_principal_client_id; redeploy the app or check API version.",
             file=sys.stderr,
         )
         return 1
 
-    # UC SQL: quote identifiers; principal display name may contain spaces — use backticks only around identifiers.
     cat = catalog.replace("`", "``")
     sch = schema.replace("`", "``")
     pr = principal.replace("`", "``")
 
-    # USAGE/SELECT on schema is sufficient for typical Genie + warehouse queries on `main` (USE CATALOG on main is often default).
+    # Metastore privilege model (e.g. 1.x): USE SCHEMA + SELECT ON SCHEMA — not USAGE ON SCHEMA /
+    # ALL TABLES IN SCHEMA (parse or privilege errors on some workspaces).
     stmts = [
-        f"GRANT USAGE ON SCHEMA `{cat}`.`{sch}` TO `{pr}`",
-        f"GRANT SELECT ON ALL TABLES IN SCHEMA `{cat}`.`{sch}` TO `{pr}`",
-        f"GRANT SELECT ON FUTURE TABLES IN SCHEMA `{cat}`.`{sch}` TO `{pr}`",
+        f"GRANT USE SCHEMA ON SCHEMA `{cat}`.`{sch}` TO `{pr}`",
+        f"GRANT SELECT ON SCHEMA `{cat}`.`{sch}` TO `{pr}`",
     ]
 
     print(
@@ -154,7 +170,7 @@ def main() -> int:
     for stmt in stmts:
         print(f"  {stmt}", file=sys.stderr)
         try:
-            _run_sql_statement(target, warehouse_id, stmt)
+            _run_sql_statement(target, warehouse_id, stmt, profile)
         except (subprocess.CalledProcessError, RuntimeError) as e:
             print(f"ERROR: Statement failed ({e}).", file=sys.stderr)
             return 1

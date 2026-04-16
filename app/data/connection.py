@@ -43,6 +43,21 @@ def _sdk_workspace_url() -> str:
     return f"https://{raw.split('/')[0].rstrip('/')}"
 
 
+def _workspace_url_for_sql() -> str:
+    """
+    Workspace URL used for OAuth + SQL Thrift. Must be the **workspace** host, not the App URL.
+    """
+    url = _sdk_workspace_url()
+    if "databricksapps.com" in url.lower():
+        logger.error(
+            "DATABRICKS_HOST must be the workspace URL (e.g. https://xxx.cloud.databricks.com), "
+            "not the Databricks Apps URL (%s). Using config fallback.",
+            url,
+        )
+        return databricks_config.sdk_host_url()
+    return url
+
+
 def _warehouse_http_path() -> str:
     """Resolve /sql/1.0/warehouses/{id} from bundle env or config."""
     explicit = (os.getenv("DATABRICKS_HTTP_PATH") or "").strip()
@@ -66,13 +81,20 @@ def _connect_with_token(sql_mod: Any, server_hostname: str, http_path: str, acce
     )
 
 
+def _sql_connect_kwargs() -> dict:
+    """Shared connector kwargs (Databricks SQL Thrift)."""
+    return {"_socket_timeout": 120}
+
+
 def get_databricks_connection():
     """
     Create a connection to Databricks SQL Warehouse.
 
     Uses different authentication methods:
-    - LOCAL: Personal Access Token
-    - DBX: OAuth M2M — prefer bearer token (oauth_token) + access_token= for SQL connector
+    - LOCAL: Personal Access Token (+ optional session catalog/schema)
+    - DBX: Databricks Apps runtime — follow official cookbook: default ``Config()`` + ``cfg.authenticate``
+      (see https://apps-cookbook.dev/docs/streamlit/tables/tables_read ), then fall back to explicit
+      OAuth M2M / bearer token if needed.
 
     Returns:
         Connection object or None if connection fails
@@ -94,101 +116,149 @@ def get_databricks_connection():
                 schema=schema or None,
             )
 
-        client_id = os.getenv("DATABRICKS_CLIENT_ID")
-        client_secret = os.getenv("DATABRICKS_CLIENT_SECRET")
-        if not client_id or not client_secret:
-            raise ValueError(
-                "DATABRICKS_CLIENT_ID and DATABRICKS_CLIENT_SECRET must be set in the app runtime."
-            )
-
-        workspace_url = _sdk_workspace_url()
-        server_hostname = _bare_hostname_for_sql(workspace_url)
         http_path = _warehouse_http_path()
+        kw = _sql_connect_kwargs()
+        workspace_url = _workspace_url_for_sql()
+        server_hostname = _bare_hostname_for_sql(workspace_url)
+        client_id = (os.getenv("DATABRICKS_CLIENT_ID") or "").strip()
+        client_secret = (os.getenv("DATABRICKS_CLIENT_SECRET") or "").strip()
 
         logger.info(
-            "SQL connect: host=%s path=%s",
+            "DBX SQL target: workspace_host=%s warehouse_path=%s",
             server_hostname,
-            http_path[:40] + "..." if len(http_path) > 40 else http_path,
+            http_path[:48] + "..." if len(http_path) > 48 else http_path,
         )
 
-        def build_cfg() -> Config:
-            return Config(
-                host=workspace_url,
-                client_id=client_id,
-                client_secret=client_secret,
-            )
-
-        cfg = build_cfg()
-
-        # --- 1) Bearer token from OAuth M2M provider (best for SQL Thrift; avoids credentials_provider quirks) ---
-        m2m = oauth_service_principal(cfg)
-        if m2m is not None:
+        # --- 1) OAuth M2M first when Apps injects client id/secret (explicit auth_type avoids ambiguous Config defaults) ---
+        # See: https://docs.databricks.com/aws/en/dev-tools/auth/oauth-m2m.html
+        if client_id and client_secret:
             try:
-                tok = m2m.oauth_token()
+                cfg_m2m = Config(
+                    host=workspace_url,
+                    client_id=client_id,
+                    client_secret=client_secret,
+                    auth_type="oauth-m2m",
+                )
+            except TypeError:
+                cfg_m2m = Config(
+                    host=workspace_url,
+                    client_id=client_id,
+                    client_secret=client_secret,
+                )
+            m2m = oauth_service_principal(cfg_m2m)
+            if m2m is not None:
+                try:
+                    tok = m2m.oauth_token()
+                    at = (tok.access_token or "").strip() if tok else ""
+                    if at:
+                        return _connect_with_token(sql, server_hostname, http_path, at)
+                except Exception as e:
+                    logger.warning("M2M oauth_token (oauth-m2m Config) failed: %s", e)
+
+            try:
+                tok = cfg_m2m.oauth_token()
                 at = (tok.access_token or "").strip() if tok else ""
                 if at:
                     return _connect_with_token(sql, server_hostname, http_path, at)
             except Exception as e:
-                logger.warning("M2M oauth_token for SQL failed: %s", e)
+                logger.warning("cfg_m2m.oauth_token() failed: %s", e)
 
-        # --- 2) Config.oauth_token() (when inner factory is OAuthCredentialsProvider) ---
-        try:
-            tok = cfg.oauth_token()
-            at = (tok.access_token or "").strip() if tok else ""
-            if at:
-                return _connect_with_token(sql, server_hostname, http_path, at)
-        except Exception as e:
-            logger.warning("cfg.oauth_token() failed: %s", e)
-
-        # --- 3) Fresh Config() from env (Apps injects DATABRICKS_HOST + SP creds) ---
-        cfg_env = Config()
-        m2m_env = oauth_service_principal(cfg_env)
-        if m2m_env is not None:
-            try:
-                tok = m2m_env.oauth_token()
-                at = (tok.access_token or "").strip() if tok else ""
-                if at:
-                    host_env = _bare_hostname_for_sql(
-                        (cfg_env.host or workspace_url or "").strip() or workspace_url
+            if m2m is not None:
+                try:
+                    return sql.connect(
+                        server_hostname=server_hostname,
+                        http_path=http_path,
+                        credentials_provider=lambda: m2m,
+                        **kw,
                     )
-                    return _connect_with_token(sql, host_env, http_path, at)
-            except Exception as e:
-                logger.warning("env Config M2M oauth_token failed: %s", e)
+                except Exception as e:
+                    logger.warning("credentials_provider M2M failed: %s", e)
 
-        # --- 4) credentials_provider fallbacks ---
-        if m2m is not None:
             try:
                 return sql.connect(
                     server_hostname=server_hostname,
                     http_path=http_path,
-                    credentials_provider=lambda: m2m,
+                    credentials_provider=lambda: cfg_m2m.authenticate,
+                    **kw,
                 )
             except Exception as e:
-                logger.warning("credentials_provider M2M failed: %s", e)
+                logger.warning("SQL connect (oauth-m2m cfg.authenticate) failed: %s", e)
 
+        # --- 2) Cookbook path: default Config() + authenticate (runtime-injected profile) ---
+        # https://apps-cookbook.dev/docs/streamlit/tables/tables_read
+        cfg_apps = Config()
+        raw_host = (cfg_apps.host or os.getenv("DATABRICKS_HOST") or "").strip()
+        if not raw_host:
+            logger.warning("DBX: DATABRICKS_HOST / Config.host missing; cannot open SQL session.")
+            return None
+        server_apps = _bare_hostname_for_sql(raw_host)
+        logger.info(
+            "SQL connect (cookbook default Config): host=%s path=%s",
+            server_apps,
+            http_path[:48] + "..." if len(http_path) > 48 else http_path,
+        )
         try:
             return sql.connect(
-                server_hostname=server_hostname,
+                server_hostname=server_apps,
                 http_path=http_path,
-                credentials_provider=lambda: cfg.authenticate,
+                credentials_provider=lambda: cfg_apps.authenticate,
+                **kw,
             )
         except Exception as e:
-            logger.warning("credentials_provider cfg.authenticate failed: %s", e)
+            logger.warning("Cookbook SQL connect (Config.authenticate) failed: %s", e)
 
-        host_env = _bare_hostname_for_sql(
-            (cfg_env.host or workspace_url or "").strip() or workspace_url
-        )
-        if m2m_env is not None:
-            return sql.connect(
-                server_hostname=host_env,
-                http_path=http_path,
-                credentials_provider=lambda: m2m_env,
+        # --- 3) Legacy explicit Config without auth_type (older SDK / runtimes) ---
+        if client_id and client_secret:
+            cfg = Config(
+                host=workspace_url,
+                client_id=client_id,
+                client_secret=client_secret,
             )
-        return sql.connect(
-            server_hostname=host_env,
-            http_path=http_path,
-            credentials_provider=lambda: cfg_env.authenticate,
+            m2m = oauth_service_principal(cfg)
+            if m2m is not None:
+                try:
+                    tok = m2m.oauth_token()
+                    at = (tok.access_token or "").strip() if tok else ""
+                    if at:
+                        return _connect_with_token(sql, server_hostname, http_path, at)
+                except Exception as e:
+                    logger.warning("M2M oauth_token (legacy Config) failed: %s", e)
+
+            try:
+                tok = cfg.oauth_token()
+                at = (tok.access_token or "").strip() if tok else ""
+                if at:
+                    return _connect_with_token(sql, server_hostname, http_path, at)
+            except Exception as e:
+                logger.warning("cfg.oauth_token() failed: %s", e)
+
+            if m2m is not None:
+                try:
+                    return sql.connect(
+                        server_hostname=server_hostname,
+                        http_path=http_path,
+                        credentials_provider=lambda: m2m,
+                        **kw,
+                    )
+                except Exception as e:
+                    logger.warning("credentials_provider M2M (legacy) failed: %s", e)
+
+            try:
+                return sql.connect(
+                    server_hostname=server_hostname,
+                    http_path=http_path,
+                    credentials_provider=lambda: cfg.authenticate,
+                    **kw,
+                )
+            except Exception as e:
+                logger.warning("credentials_provider explicit cfg.authenticate failed: %s", e)
+
+        logger.error(
+            "DBX: All SQL connection strategies failed (Thrift open_session / OAuth). "
+            "This is independent of DLT/jobs: fix workspace host, OAuth for the app identity, "
+            "warehouse CAN USE, and UC grants. Pipeline running does not block SQL."
         )
+        return None
 
     except ImportError as e:
         import traceback

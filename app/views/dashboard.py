@@ -12,7 +12,8 @@ from typing import Optional
 from config import databricks_config, app_config, THEME
 from data.connection import run_query
 from components.metrics import create_plotly_theme
-from data.mock_data import get_live_kpis, get_mock_kpis
+from data.mock_data import get_mock_kpis, get_placeholder_kpis
+from data.queries import fetch_live_dashboard_kpis
 
 
 SCHEMA = databricks_config.full_schema
@@ -406,12 +407,21 @@ def render_dashboard_page():
     # TAB 1: OVERVIEW (Embedded Dashboard)
     # =========================================================================
     with tab1:
-        # Load KPIs
-        try:
-            kpis = get_live_kpis()
-        except:
+        # Top row = Streamlit SQL (silver/gold). Iframe = Lakeview (separate queries/cache).
+        # Never silently use mock KPIs when Live is selected — that caused $36M vs ~$11M mismatches when SQL failed.
+        if should_use_mock_data():
             kpis = get_mock_kpis()
-        
+        else:
+            kpis = fetch_live_dashboard_kpis()
+            if kpis is None:
+                st.warning(
+                    "⚠️ **Top KPIs** could not be loaded from the lakehouse (SQL not connected or query error). "
+                    "The **embedded dashboard** below still uses Lakeview in the workspace and may show different numbers. "
+                    "Fix **Settings → Database**, run **Refresh**, ensure the app identity has **CAN USE** on the SQL warehouse, "
+                    "or choose **Mock Data** for a consistent demo."
+                )
+                kpis = get_placeholder_kpis()
+
         # Compact KPI row
         col1, col2, col3, col4 = st.columns(4)
         

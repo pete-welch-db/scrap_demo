@@ -12,8 +12,8 @@ env:
   - name: ENVIRONMENT
     value: "DBX"
 
-# Environment variables are automatically set by Databricks Apps runtime
-# (DATABRICKS_HOST, DATABRICKS_TOKEN, DATABRICKS_WAREHOUSE_ID)
+# SQL auth: runtime injects host + credentials; `data/connection.py` uses SDK `Config()` + SQL connector
+# per Databricks Apps Cookbook — https://apps-cookbook.dev/docs/streamlit/tables/tables_read
 
 # Resources
 resources:

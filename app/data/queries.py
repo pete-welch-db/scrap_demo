@@ -104,7 +104,7 @@ def get_kpi_summary() -> dict:
             "ytd_scrap_cost": full["ytd_scrap_cost"],
             "ytd_units_scrapped": full["ytd_units_scrapped"],
         }
-    return {"ytd_scrap_cost": 4200000, "ytd_units_scrapped": 127000}
+    return {"ytd_scrap_cost": 0.0, "ytd_units_scrapped": 0.0}
 
 
 def fetch_live_dashboard_kpis() -> Optional[dict]:

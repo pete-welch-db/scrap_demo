@@ -18,7 +18,9 @@ resources:
       
       # Resources: SQL warehouse + Genie (set genie_space_id after scripts/deploy_genie_space.py).
       # Genie: https://docs.databricks.com/aws/en/dev-tools/databricks-apps/genie
-      # Unity Catalog for the app SP: scripts/grant_app_uc_access.py after app deploy.
+      # Unity Catalog (SELECT / USE SCHEMA on tables): scripts/grant_app_uc_access.py after app deploy.
+      # Warehouse ACL: this block requests CAN_USE on the warehouse for the app identity; if the app
+      # still shows "Not connected", verify in the warehouse UI or run scripts/check_app_warehouse_access.py.
       resources:
         - name: sql-warehouse
           sql_warehouse:

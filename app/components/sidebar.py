@@ -64,9 +64,13 @@ def render_sidebar() -> str:
                     unsafe_allow_html=True
                 )
             else:
+                # Not the same as choosing "Mock Data" below — this means SQL/warehouse auth failed.
                 st.markdown(
-                    '<span class="status-badge disconnected">❌ Mock Data</span>', 
-                    unsafe_allow_html=True
+                    '<span class="status-badge disconnected">❌ Not connected</span>',
+                    unsafe_allow_html=True,
+                )
+                st.caption(
+                    "SQL session failed (OAuth/warehouse). DLT/pipeline does not need to finish for this to work."
                 )
             
             # Genie API Status

@@ -63,84 +63,146 @@ def get_scenario_data():
     if should_use_mock_data():
         return _generate_mock_scenario_data()
     
-    # Load from database
+    # Load from database (queries in data/queries.py → Gold tables e.g. plant_monthly_scenario_gold)
     monthly_df, parts_df, wc_df, plants_list, wc_types = _load_scenario_data_from_db()
-    
-    # Check if we got live data
-    if monthly_df is not None and len(monthly_df) > 0:
-        # Transform to expected format
-        if 'month_date' in monthly_df.columns:
-            monthly_df['month'] = pd.to_datetime(monthly_df['month_date'])
-        elif 'month' not in monthly_df.columns:
-            monthly_df['month'] = pd.Timestamp.now()
-        
-        if plants_list:
-            plants = plants_list
-        else:
-            plants = monthly_df["plant"].dropna().unique().tolist()
-        work_centers = wc_types if wc_types else []
-        if not work_centers and wc_df is not None and 'work_center_type' in wc_df.columns:
-            work_centers = wc_df['work_center_type'].unique().tolist()
-        
-        # Transform parts data - ensure required columns exist
-        if parts_df is not None and len(parts_df) > 0:
-            # Add missing columns if not present
-            if 'supplier_name' not in parts_df.columns:
-                parts_df['supplier_name'] = 'Unknown Supplier'
-            if 'part_category' not in parts_df.columns:
-                parts_df['part_category'] = 'General'
-        else:
-            # Show error - no parts data from DB
-            st.warning("⚠️ Parts data not available from database")
-            parts_df = pd.DataFrame({'part_id': [], 'part_name': [], 'monthly_scrap_cost': [], 'defect_rate': [], 'unit_cost': [], 'supplier_name': [], 'part_category': []})
-        
-        # Transform work center data  
-        if wc_df is not None and len(wc_df) > 0:
-            # Use work_center_type for grouping (different work center types)
-            group_cols = []
-            if 'work_center_type' in wc_df.columns:
-                group_cols.append('work_center_type')
-            if 'plant' in wc_df.columns:
-                group_cols.append('plant')
-            
-            if group_cols:
-                agg_dict = {}
-                if 'monthly_scrap_cost' in wc_df.columns:
-                    agg_dict['monthly_scrap_cost'] = 'mean'
-                if 'oee' in wc_df.columns:
-                    agg_dict['oee'] = 'mean'
-                if 'avg_equipment_age' in wc_df.columns:
-                    agg_dict['avg_equipment_age'] = 'mean'
-                
-                if agg_dict:
-                    wc_df = wc_df.groupby(group_cols).agg(agg_dict).reset_index()
-                    
-            # Rename columns to expected names
-            rename_map = {}
-            if 'work_center_type' in wc_df.columns:
-                rename_map['work_center_type'] = 'work_center'
-            if 'avg_equipment_age' in wc_df.columns:
-                rename_map['avg_equipment_age'] = 'equipment_age'
-            if rename_map:
-                wc_df = wc_df.rename(columns=rename_map)
-        else:
-            # Show error - no work center data from DB
-            st.warning("⚠️ Work center data not available from database")
-            wc_df = pd.DataFrame({'work_center': [], 'plant': [], 'monthly_scrap_cost': [], 'oee': [], 'equipment_age': []})
-        
-        return monthly_df, parts_df, wc_df, plants, work_centers, True
-    
-    # No data from database - show error (don't fall back to mock)
-    st.error("❌ Could not load data from database. Check connection in Settings or enable Mock Data.")
-    # Return empty dataframes to prevent crashes
-    return (
-        pd.DataFrame({'month': [], 'plant': [], 'scrap_cost': []}),
-        pd.DataFrame({'part_id': [], 'part_name': [], 'monthly_scrap_cost': [], 'defect_rate': [], 'unit_cost': [], 'supplier_name': [], 'part_category': []}),
-        pd.DataFrame({'work_center': [], 'plant': [], 'monthly_scrap_cost': [], 'oee': [], 'equipment_age': []}),
-        [],
-        [],
-        False
-    )
+
+    if monthly_df is None:
+        st.error(
+            "❌ Database queries did not run (SQL connection failed or query error). "
+            "Open **Settings** — if it shows **Not connected**, fix warehouse/UC/auth, then **Refresh**. "
+            "Or choose **Mock Data** under Data Source to demo without the lakehouse."
+        )
+        return (
+            pd.DataFrame({"month": [], "plant": [], "scrap_cost": []}),
+            pd.DataFrame(
+                {
+                    "part_id": [],
+                    "part_name": [],
+                    "monthly_scrap_cost": [],
+                    "defect_rate": [],
+                    "unit_cost": [],
+                    "supplier_name": [],
+                    "part_category": [],
+                }
+            ),
+            pd.DataFrame(
+                {
+                    "work_center": [],
+                    "plant": [],
+                    "monthly_scrap_cost": [],
+                    "oee": [],
+                    "equipment_age": [],
+                }
+            ),
+            [],
+            [],
+            False,
+        )
+
+    if len(monthly_df) == 0:
+        st.error(
+            "❌ No plant scenario rows in the database. Run the pipeline job so Gold tables "
+            "(e.g. `plant_monthly_scenario_gold`) are populated, or use **Mock Data** in Settings."
+        )
+        return (
+            pd.DataFrame({"month": [], "plant": [], "scrap_cost": []}),
+            pd.DataFrame(
+                {
+                    "part_id": [],
+                    "part_name": [],
+                    "monthly_scrap_cost": [],
+                    "defect_rate": [],
+                    "unit_cost": [],
+                    "supplier_name": [],
+                    "part_category": [],
+                }
+            ),
+            pd.DataFrame(
+                {
+                    "work_center": [],
+                    "plant": [],
+                    "monthly_scrap_cost": [],
+                    "oee": [],
+                    "equipment_age": [],
+                }
+            ),
+            [],
+            [],
+            False,
+        )
+
+    # Non-empty monthly plant data: normalize and return live scenario inputs
+    if "month_date" in monthly_df.columns:
+        monthly_df["month"] = pd.to_datetime(monthly_df["month_date"])
+    elif "month" not in monthly_df.columns:
+        monthly_df["month"] = pd.Timestamp.now()
+
+    if plants_list:
+        plants = plants_list
+    else:
+        plants = monthly_df["plant"].dropna().unique().tolist()
+    work_centers = wc_types if wc_types else []
+    if not work_centers and wc_df is not None and "work_center_type" in wc_df.columns:
+        work_centers = wc_df["work_center_type"].unique().tolist()
+
+    if parts_df is not None and len(parts_df) > 0:
+        if "supplier_name" not in parts_df.columns:
+            parts_df["supplier_name"] = "Unknown Supplier"
+        if "part_category" not in parts_df.columns:
+            parts_df["part_category"] = "General"
+    else:
+        st.warning("⚠️ Parts data not available from database")
+        parts_df = pd.DataFrame(
+            {
+                "part_id": [],
+                "part_name": [],
+                "monthly_scrap_cost": [],
+                "defect_rate": [],
+                "unit_cost": [],
+                "supplier_name": [],
+                "part_category": [],
+            }
+        )
+
+    if wc_df is not None and len(wc_df) > 0:
+        group_cols = []
+        if "work_center_type" in wc_df.columns:
+            group_cols.append("work_center_type")
+        if "plant" in wc_df.columns:
+            group_cols.append("plant")
+
+        if group_cols:
+            agg_dict = {}
+            if "monthly_scrap_cost" in wc_df.columns:
+                agg_dict["monthly_scrap_cost"] = "mean"
+            if "oee" in wc_df.columns:
+                agg_dict["oee"] = "mean"
+            if "avg_equipment_age" in wc_df.columns:
+                agg_dict["avg_equipment_age"] = "mean"
+
+            if agg_dict:
+                wc_df = wc_df.groupby(group_cols).agg(agg_dict).reset_index()
+
+        rename_map = {}
+        if "work_center_type" in wc_df.columns:
+            rename_map["work_center_type"] = "work_center"
+        if "avg_equipment_age" in wc_df.columns:
+            rename_map["avg_equipment_age"] = "equipment_age"
+        if rename_map:
+            wc_df = wc_df.rename(columns=rename_map)
+    else:
+        st.warning("⚠️ Work center data not available from database")
+        wc_df = pd.DataFrame(
+            {
+                "work_center": [],
+                "plant": [],
+                "monthly_scrap_cost": [],
+                "oee": [],
+                "equipment_age": [],
+            }
+        )
+
+    return monthly_df, parts_df, wc_df, plants, work_centers, True
 
 
 def _generate_mock_parts_data():
@@ -274,10 +336,35 @@ def get_supplier_data():
     if should_use_mock_data():
         return _generate_mock_supplier_data()
     
-    # Try loading live data
     suppliers_df = load_supplier_scenario_data()
-    
-    if suppliers_df is not None and len(suppliers_df) > 0:
+
+    if suppliers_df is None:
+        st.error(
+            "❌ Supplier scenario query failed (same cause as main scenario data: SQL connection or permissions). "
+            "See **Settings → Database**."
+        )
+        empty_df = pd.DataFrame(
+            {
+                "id": [],
+                "name": [],
+                "tier": [],
+                "category": [],
+                "region": [],
+                "quality_score": [],
+                "on_time_delivery": [],
+                "parts_supplied": [],
+                "annual_spend": [],
+                "scrap_cost": [],
+                "scrap_rate": [],
+                "capacity_util": [],
+                "available_capacity": [],
+                "risk_score": [],
+                "unit_cost_index": [],
+            }
+        )
+        return empty_df, False
+
+    if len(suppliers_df) > 0:
         # Rename columns to match expected format
         suppliers_df = suppliers_df.rename(columns={
             'supplier_id': 'id',
@@ -297,9 +384,8 @@ def get_supplier_data():
             'unit_cost_index': 'unit_cost_index'
         })
         return suppliers_df, True
-    
-    # No data from database - return empty DataFrame with required columns
-    st.error("❌ Could not load supplier data from database.")
+
+    st.warning("⚠️ No supplier scenario rows (check `supplier_scenario_gold` after pipeline run).")
     empty_df = pd.DataFrame({
         'id': [], 'name': [], 'tier': [], 'category': [], 'region': [],
         'quality_score': [], 'on_time_delivery': [], 'parts_supplied': [],

@@ -96,24 +96,42 @@ def load_mock_data() -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, List[str
 
 
 def get_mock_kpis() -> dict:
-    """Return mock KPI values."""
+    """Return mock KPI values (only when user selects Mock Data in Settings)."""
     return {
-        "ytd_scrap_cost": 36010000,  # $36.01M from dashboard
-        "ytd_units_scrapped": 252790,  # 252.79K from dashboard
-        "scrap_incidents": 18400,  # 18.4K from dashboard
-        "open_8d_reports": 1820,  # 1.82K from dashboard
+        "ytd_scrap_cost": 36010000,
+        "ytd_units_scrapped": 252790,
+        "scrap_incidents": 18400,
+        "open_8d_reports": 1820,
         "ytd_scrap_delta": -8.3,
         "units_delta": -12.1,
         "incidents_delta": -5.2,
-        "eight_d_delta": -3.1
+        "eight_d_delta": -3.1,
+    }
+
+
+def get_placeholder_kpis() -> dict:
+    """Neutral KPI row when Live is selected but SQL queries did not return (no fake 'live' numbers)."""
+    return {
+        "ytd_scrap_cost": 0.0,
+        "ytd_units_scrapped": 0.0,
+        "scrap_incidents": 0,
+        "open_8d_reports": 0,
+        "avg_quality_score": 0.0,
+        "ytd_scrap_delta": 0.0,
+        "units_delta": 0.0,
+        "incidents_delta": 0.0,
+        "eight_d_delta": 0.0,
     }
 
 
 @st.cache_data(ttl=300)
-def get_live_kpis() -> dict:
+def get_live_kpis():
     """
-    Fetch live KPI values from Databricks via SQL warehouse (plain SQL on silver/gold tables).
-    Falls back to mock values if the warehouse query fails.
+    Fetch live KPI values from Databricks (same SQL as ``fetch_live_dashboard_kpis``).
+
+    Returns:
+        dict of KPIs, or **None** if the warehouse query failed — callers must not substitute mock
+        unless the user chose Mock Data in Settings.
     """
     from .queries import fetch_live_dashboard_kpis
 
@@ -123,5 +141,5 @@ def get_live_kpis() -> dict:
             return kpis
     except Exception:
         pass
-    return get_mock_kpis()
+    return None
 
