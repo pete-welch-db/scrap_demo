@@ -259,77 +259,98 @@ for table in tables:
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC -- Top 10 defect codes by scrap cost
-# MAGIC SELECT 
-# MAGIC     defect_code,
-# MAGIC     defect_category,
-# MAGIC     COUNT(*) as scrap_records,
-# MAGIC     SUM(quantity_scrapped) as total_qty,
-# MAGIC     ROUND(SUM(total_scrap_cost), 2) as total_cost
-# MAGIC FROM scrap_catalog.scrap_demo.scrap_transactions_bronze
-# MAGIC GROUP BY defect_code, defect_category
-# MAGIC ORDER BY total_cost DESC
-# MAGIC LIMIT 10
+# Top 10 defect codes by scrap cost (uses job widget catalog/schema, not hardcoded catalog)
+display(
+    spark.sql(
+        f"""
+SELECT
+    defect_code,
+    defect_category,
+    COUNT(*) as scrap_records,
+    SUM(quantity_scrapped) as total_qty,
+    ROUND(SUM(total_scrap_cost), 2) as total_cost
+FROM {FULL_SCHEMA}.scrap_transactions_bronze
+GROUP BY defect_code, defect_category
+ORDER BY total_cost DESC
+LIMIT 10
+"""
+    )
+)
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC -- Monthly scrap trend
-# MAGIC SELECT 
-# MAGIC     DATE_TRUNC('month', transaction_date) as month,
-# MAGIC     SUM(quantity_scrapped) as total_qty,
-# MAGIC     ROUND(SUM(total_scrap_cost), 2) as total_cost,
-# MAGIC     COUNT(DISTINCT part_id) as unique_parts
-# MAGIC FROM scrap_catalog.scrap_demo.scrap_transactions_bronze
-# MAGIC GROUP BY DATE_TRUNC('month', transaction_date)
-# MAGIC ORDER BY month
+display(
+    spark.sql(
+        f"""
+SELECT
+    DATE_TRUNC('month', transaction_date) as month,
+    SUM(quantity_scrapped) as total_qty,
+    ROUND(SUM(total_scrap_cost), 2) as total_cost,
+    COUNT(DISTINCT part_id) as unique_parts
+FROM {FULL_SCHEMA}.scrap_transactions_bronze
+GROUP BY DATE_TRUNC('month', transaction_date)
+ORDER BY month
+"""
+    )
+)
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC -- Supplier quality vs scrap correlation
-# MAGIC SELECT 
-# MAGIC     s.supplier_name,
-# MAGIC     s.supplier_tier,
-# MAGIC     s.quality_score,
-# MAGIC     COUNT(*) as scrap_records,
-# MAGIC     SUM(t.quantity_scrapped) as total_qty_scrapped,
-# MAGIC     ROUND(SUM(t.total_scrap_cost), 2) as total_scrap_cost
-# MAGIC FROM scrap_catalog.scrap_demo.scrap_transactions_bronze t
-# MAGIC JOIN scrap_catalog.scrap_demo.suppliers_bronze s ON t.supplier_id = s.supplier_id
-# MAGIC GROUP BY s.supplier_name, s.supplier_tier, s.quality_score
-# MAGIC ORDER BY total_scrap_cost DESC
-# MAGIC LIMIT 15
+display(
+    spark.sql(
+        f"""
+SELECT
+    s.supplier_name,
+    s.supplier_tier,
+    s.quality_score,
+    COUNT(*) as scrap_records,
+    SUM(t.quantity_scrapped) as total_qty_scrapped,
+    ROUND(SUM(t.total_scrap_cost), 2) as total_scrap_cost
+FROM {FULL_SCHEMA}.scrap_transactions_bronze t
+JOIN {FULL_SCHEMA}.suppliers_bronze s ON t.supplier_id = s.supplier_id
+GROUP BY s.supplier_name, s.supplier_tier, s.quality_score
+ORDER BY total_scrap_cost DESC
+LIMIT 15
+"""
+    )
+)
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC -- 8D report summary
-# MAGIC SELECT 
-# MAGIC     status,
-# MAGIC     severity,
-# MAGIC     COUNT(*) as num_reports,
-# MAGIC     ROUND(AVG(total_scrap_cost), 2) as avg_scrap_cost,
-# MAGIC     ROUND(AVG(num_parts_affected), 1) as avg_parts_affected
-# MAGIC FROM scrap_catalog.scrap_demo.eight_d_reports_bronze
-# MAGIC GROUP BY status, severity
-# MAGIC ORDER BY status, severity
+display(
+    spark.sql(
+        f"""
+SELECT
+    status,
+    severity,
+    COUNT(*) as num_reports,
+    ROUND(AVG(total_scrap_cost), 2) as avg_scrap_cost,
+    ROUND(AVG(num_parts_affected), 1) as avg_parts_affected
+FROM {FULL_SCHEMA}.eight_d_reports_bronze
+GROUP BY status, severity
+ORDER BY status, severity
+"""
+    )
+)
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC -- Sample 8D root cause text (for LLM analysis preview)
-# MAGIC SELECT 
-# MAGIC     eight_d_id,
-# MAGIC     title,
-# MAGIC     defect_category,
-# MAGIC     severity,
-# MAGIC     LEFT(root_cause_analysis, 300) as root_cause_preview,
-# MAGIC     LEFT(corrective_actions, 300) as corrective_action_preview
-# MAGIC FROM scrap_catalog.scrap_demo.eight_d_reports_bronze
-# MAGIC WHERE status = 'Closed'
-# MAGIC LIMIT 5
+display(
+    spark.sql(
+        f"""
+SELECT
+    eight_d_id,
+    title,
+    defect_category,
+    severity,
+    LEFT(root_cause_analysis, 300) as root_cause_preview,
+    LEFT(corrective_actions, 300) as corrective_action_preview
+FROM {FULL_SCHEMA}.eight_d_reports_bronze
+WHERE status = 'Closed'
+LIMIT 5
+"""
+    )
+)
 
 # COMMAND ----------
 

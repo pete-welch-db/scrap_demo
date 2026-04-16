@@ -74,7 +74,10 @@ def get_scenario_data():
         elif 'month' not in monthly_df.columns:
             monthly_df['month'] = pd.Timestamp.now()
         
-        plants = plants_list if plants_list else monthly_df['plant'].unique().tolist()
+        if plants_list:
+            plants = plants_list
+        else:
+            plants = monthly_df["plant"].dropna().unique().tolist()
         work_centers = wc_types if wc_types else []
         if not work_centers and wc_df is not None and 'work_center_type' in wc_df.columns:
             work_centers = wc_df['work_center_type'].unique().tolist()
@@ -558,14 +561,15 @@ def render_supplier_scenario(suppliers_df: pd.DataFrame):
         st.markdown("#### Scenario Parameters")
         
         # Supplier selection
-        supplier_options = suppliers_df['name'].tolist()
-        supplier_index = st.selectbox(
+        supplier_options = suppliers_df["name"].tolist()
+        selected_name = st.selectbox(
             "Select Supplier",
-            range(len(supplier_options)),
-            format_func=lambda x: supplier_options[x],
-            key="scenario_supplier_select"
+            supplier_options,
+            key="scenario_supplier_select",
         )
-        selected_supplier = suppliers_df.iloc[supplier_index].to_dict()
+        selected_supplier = (
+            suppliers_df[suppliers_df["name"] == selected_name].iloc[0].to_dict()
+        )
         
         # Spend adjustment direction
         spend_action = st.radio(
@@ -1148,18 +1152,23 @@ def render_plant_scenario(monthly_df: pd.DataFrame, plants: list):
     
     st.markdown("### Plant-Level Scrap Reduction")
     
+    if not plants:
+        st.warning(
+            "⚠️ No plants available for scenarios. Check database data or enable Mock Data in Settings."
+        )
+        return
+    
     col1, col2 = st.columns([1, 2])
     
     with col1:
         st.markdown("#### Scenario Parameters")
         
-        plant_index = st.selectbox(
+        # Use plant names as options (not indices) so widget state stays valid when the list size changes
+        selected_plant = st.selectbox(
             "Select Plant",
-            range(len(plants)),
-            format_func=lambda x: plants[x],
-            key="scenario_plant_select"
+            plants,
+            key="scenario_plant_select",
         )
-        selected_plant = plants[plant_index]
         
         reduction_target = st.slider(
             "Scrap Reduction Target (%)",
@@ -1315,18 +1324,22 @@ def render_work_center_scenario(wc_df: pd.DataFrame, work_centers: list):
     
     st.markdown("### Work Center / Production Line Optimization")
     
+    if not work_centers:
+        st.warning(
+            "⚠️ No work center types available. Check database data or enable Mock Data in Settings."
+        )
+        return
+    
     col1, col2 = st.columns([1, 2])
     
     with col1:
         st.markdown("#### Scenario Parameters")
         
-        wc_index = st.selectbox(
+        selected_wc = st.selectbox(
             "Select Work Center Type",
-            range(len(work_centers)),
-            format_func=lambda x: work_centers[x],
-            key="scenario_wc_select"
+            work_centers,
+            key="scenario_wc_select",
         )
-        selected_wc = work_centers[wc_index]
         
         target_oee = st.slider(
             "Target OEE Improvement (%)",

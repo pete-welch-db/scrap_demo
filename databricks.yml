@@ -2,9 +2,10 @@
 # =====================================
 # Scrap Reduction Intelligence Platform
 # 
-# Deploy: databricks bundle deploy --target dev
-# Validate: databricks bundle validate
-# Run: databricks bundle run <job_name>
+# Full automation (dashboards + DLT + jobs + ML + Genie + app):
+#   ./deploy.sh <target>     e.g.  ./deploy.sh sandbox
+#   DEPLOY_TARGET=sandbox ./deploy.sh
+# Piecemeal: databricks bundle deploy | bundle run scrap_setup_job | bundle run scrap_pipeline_job
 
 bundle:
   name: scrap-reduction-platform
@@ -20,6 +21,16 @@ variables:
   warehouse_id:
     description: SQL Warehouse ID for queries
     default: 288a7ec183eea397
+  dashboard_embed_url:
+    description: Lakeview embed URL for the Streamlit app (optional)
+    default: ""
+  genie_space_id:
+    description: Genie space ID (set automatically by scripts/deploy_genie_space.py after data exists)
+    default: ""
+  # Lakeview JSON under Dashboards/ — use *.main.* for workspaces where UC is main.scrap_demo (sandbox)
+  dashboard_definition_file:
+    description: Executive dashboard filename (repo Dashboards/ folder)
+    default: Executive_Scrap_Dashboard.lvdash.json
   # Service principal for production deployments
   service_principal_name:
     description: Service principal for running jobs and apps
@@ -43,9 +54,26 @@ targets:
     variables:
       catalog: scrap_catalog
       schema: scrap_demo
+      dashboard_embed_url: "https://fe-vm-industry-solutions-buildathon.cloud.databricks.com/embed/dashboardsv3/01f12de4304e1749a624a5c3b218b708?o=237438879023004"
     workspace:
       host: https://fe-vm-industry-solutions-buildathon.cloud.databricks.com
       profile: fe-vm-industry-solutions-buildathon
+
+  # FE sandbox workspace (scrap demo)
+  # Unity Catalog: use `main` (schema created as main.scrap_demo); `scrap_catalog` is not available via CLI on this account
+  sandbox:
+    mode: development
+    variables:
+      catalog: main
+      schema: scrap_demo
+      warehouse_id: 6d46fc3b97d002fb
+      dashboard_embed_url: "https://fe-sandbox-scrapdemo.cloud.databricks.com/embed/dashboardsv3/01f139950183152e8edd316ba291a8ad?o=7474659424822813"
+      dashboard_definition_file: Executive_Scrap_Dashboard.main.lvdash.json
+      # Set by scripts/deploy_genie_space.py (create/update); update here if the space is recreated
+      genie_space_id: "01f139af121b19c1be64480306efcc41"
+    workspace:
+      host: https://fe-sandbox-scrapdemo.cloud.databricks.com
+      profile: fe-sandbox-scrapdemo
 
   # Azure workspace environment
   azure:

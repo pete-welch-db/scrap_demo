@@ -16,13 +16,39 @@ resources:
       # Source code location - automatically synced to workspace
       source_code_path: ../app
       
-      # Resources (SQL Warehouse and other Databricks resources)
+      # Resources: SQL warehouse + Genie (set genie_space_id after scripts/deploy_genie_space.py).
+      # Genie: https://docs.databricks.com/aws/en/dev-tools/databricks-apps/genie
+      # Unity Catalog for the app SP: scripts/grant_app_uc_access.py after app deploy.
       resources:
         - name: sql-warehouse
           sql_warehouse:
             id: ${var.warehouse_id}
             permission: CAN_USE
-      
+        - name: genie-space
+          genie_space:
+            # Title must match scripts/deploy_genie_space.py (_space_title)
+            name: Scrap Reduction Genie (${bundle.target})
+            space_id: ${var.genie_space_id}
+            permission: CAN_RUN
+
+      # Overrides app/app.yaml; see https://docs.databricks.com/aws/en/dev-tools/bundles/resources#appconfig
+      config:
+        env:
+          - name: DATABRICKS_CATALOG
+            value: ${var.catalog}
+          - name: DATABRICKS_SCHEMA
+            value: ${var.schema}
+          - name: DATABRICKS_HTTP_PATH
+            value: /sql/1.0/warehouses/${var.warehouse_id}
+          - name: DATABRICKS_WAREHOUSE_ID
+            value: ${var.warehouse_id}
+          - name: DASHBOARD_EMBED_URL
+            value: ${var.dashboard_embed_url}
+          # Injected from the attached Genie resource (same key as resources[].name); avoids empty ${var}.
+          # See https://docs.databricks.com/aws/en/dev-tools/databricks-apps/environment-variables
+          - name: GENIE_SPACE_ID
+            value_from: genie-space
+
       # Permissions for the app (valid levels: CAN_MANAGE, CAN_USE)
       permissions:
         - level: CAN_MANAGE

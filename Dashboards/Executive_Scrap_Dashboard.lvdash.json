@@ -4,231 +4,231 @@
       "name": "ytd_kpis",
       "displayName": "YTD KPIs",
       "queryLines": [
-        "SELECT MEASURE(`YTD Scrap Cost`) as total_scrap_cost, MEASURE(`YTD Units Scrapped`) as total_qty_scrapped FROM scrap_catalog.scrap_demo.scrap_operations_metrics"
+        "SELECT MEASURE(`YTD Scrap Cost`) as total_scrap_cost, MEASURE(`YTD Units Scrapped`) as total_qty_scrapped FROM main.scrap_demo.scrap_operations_metrics"
       ]
     },
     {
       "name": "eight_d_status",
       "displayName": "8D Status",
       "queryLines": [
-        "SELECT MEASURE(`Open Reports`) as open_count FROM scrap_catalog.scrap_demo.eight_d_quality_metrics"
+        "SELECT MEASURE(`Open Reports`) as open_count FROM main.scrap_demo.eight_d_quality_metrics"
       ]
     },
     {
       "name": "supplier_quality_avg",
       "displayName": "Supplier Quality Average",
       "queryLines": [
-        "SELECT MEASURE(`Avg Quality Score`) as avg_quality FROM scrap_catalog.scrap_demo.supplier_quality_metrics"
+        "SELECT MEASURE(`Avg Quality Score`) as avg_quality FROM main.scrap_demo.supplier_quality_metrics"
       ]
     },
     {
       "name": "monthly_trend",
       "displayName": "Monthly Scrap Trend",
       "queryLines": [
-        "SELECT `Transaction Month` as year_month, `Transaction Year` as year, MEASURE(`Total Scrap Cost`) as total_scrap_cost, MEASURE(`Total Units Scrapped`) as total_quantity_scrapped FROM scrap_catalog.scrap_demo.scrap_operations_metrics GROUP BY `Transaction Month`, `Transaction Year` ORDER BY year_month"
+        "SELECT `Transaction Month` as year_month, `Transaction Year` as year, MEASURE(`Total Scrap Cost`) as total_scrap_cost, MEASURE(`Total Units Scrapped`) as total_quantity_scrapped FROM main.scrap_demo.scrap_operations_metrics GROUP BY `Transaction Month`, `Transaction Year` ORDER BY year_month"
       ]
     },
     {
       "name": "plant_ytd_summary",
       "displayName": "Plant YTD Summary",
       "queryLines": [
-        "SELECT `Plant` as plant, MEASURE(`YTD Scrap Cost`) as total_scrap_cost FROM scrap_catalog.scrap_demo.scrap_operations_metrics GROUP BY `Plant`"
+        "SELECT `Plant` as plant, MEASURE(`YTD Scrap Cost`) as total_scrap_cost FROM main.scrap_demo.scrap_operations_metrics GROUP BY `Plant`"
       ]
     },
     {
       "name": "defect_pareto",
       "displayName": "Defect Pareto",
       "queryLines": [
-        "SELECT defect_category, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM scrap_catalog.scrap_demo.scrap_by_defect_gold WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY defect_category ORDER BY total_scrap_cost DESC LIMIT 10"
+        "SELECT defect_category, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM main.scrap_demo.scrap_by_defect_gold WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY defect_category ORDER BY total_scrap_cost DESC LIMIT 10"
       ]
     },
     {
       "name": "shift_breakdown",
       "displayName": "Shift Breakdown",
       "queryLines": [
-        "SELECT shift, plant_name_lookup as plant, ROUND(SUM(quantity_scrapped), 0) as quantity_scrapped FROM scrap_catalog.scrap_demo.scrap_transactions_silver WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY shift, plant_name_lookup"
+        "SELECT shift, plant_name_lookup as plant, ROUND(SUM(quantity_scrapped), 0) as quantity_scrapped FROM main.scrap_demo.scrap_transactions_silver WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY shift, plant_name_lookup"
       ]
     },
     {
       "name": "top_scrap_parts",
       "displayName": "Top Scrap Parts",
       "queryLines": [
-        "SELECT part_id, part_name_lookup, supplier_name_lookup as supplier, plant_name_lookup as plant, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost, ROUND(SUM(quantity_scrapped), 0) as quantity_scrapped FROM scrap_catalog.scrap_demo.scrap_transactions_silver WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY part_id, part_name_lookup, supplier_name_lookup, plant_name_lookup ORDER BY total_scrap_cost DESC LIMIT 10"
+        "SELECT part_id, part_name_lookup, supplier_name_lookup as supplier, plant_name_lookup as plant, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost, ROUND(SUM(quantity_scrapped), 0) as quantity_scrapped FROM main.scrap_demo.scrap_transactions_silver WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY part_id, part_name_lookup, supplier_name_lookup, plant_name_lookup ORDER BY total_scrap_cost DESC LIMIT 10"
       ]
     },
     {
       "name": "plant_forecast",
       "displayName": "Plant Forecast",
       "queryLines": [
-        "SELECT year_month, plant_name_lookup as plant, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM scrap_catalog.scrap_demo.scrap_by_plant_gold GROUP BY year_month, plant_name_lookup ORDER BY year_month"
+        "SELECT year_month, plant_name_lookup as plant, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM main.scrap_demo.scrap_by_plant_gold GROUP BY year_month, plant_name_lookup ORDER BY year_month"
       ]
     },
     {
       "name": "supplier_forecast",
       "displayName": "Supplier Forecast",
       "queryLines": [
-        "SELECT supplier_name_lookup as supplier, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM scrap_catalog.scrap_demo.scrap_by_supplier_gold WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY supplier_name_lookup ORDER BY total_scrap_cost DESC LIMIT 10"
+        "SELECT supplier_name_lookup as supplier, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM main.scrap_demo.scrap_by_supplier_gold WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY supplier_name_lookup ORDER BY total_scrap_cost DESC LIMIT 10"
       ]
     },
     {
       "name": "seasonal_patterns",
       "displayName": "Seasonal Patterns",
       "queryLines": [
-        "SELECT transaction_month, day_name, ROUND(AVG(total_scrap_cost), 2) as total_scrap_cost FROM scrap_catalog.scrap_demo.scrap_daily_summary_gold GROUP BY transaction_month, day_name"
+        "SELECT transaction_month, day_name, ROUND(AVG(total_scrap_cost), 2) as total_scrap_cost FROM main.scrap_demo.scrap_daily_summary_gold GROUP BY transaction_month, day_name"
       ]
     },
     {
       "name": "feature_importance",
       "displayName": "Feature Importance",
       "queryLines": [
-        "SELECT defect_category, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM scrap_catalog.scrap_demo.scrap_by_defect_gold GROUP BY defect_category ORDER BY total_scrap_cost DESC LIMIT 8"
+        "SELECT defect_category, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM main.scrap_demo.scrap_by_defect_gold GROUP BY defect_category ORDER BY total_scrap_cost DESC LIMIT 8"
       ]
     },
     {
       "name": "supplier_risk",
       "displayName": "Supplier Risk",
       "queryLines": [
-        "SELECT DISTINCT supplier_id, supplier_name_lookup as supplier, ROUND(supplier_quality_score, 3) as supplier_quality_score FROM scrap_catalog.scrap_demo.scrap_transactions_silver WHERE supplier_quality_score < 0.85"
+        "SELECT DISTINCT supplier_id, supplier_name_lookup as supplier, ROUND(supplier_quality_score, 3) as supplier_quality_score FROM main.scrap_demo.scrap_transactions_silver WHERE supplier_quality_score < 0.85"
       ]
     },
     {
       "name": "supplier_quality_scrap",
       "displayName": "Supplier Quality vs Scrap",
       "queryLines": [
-        "SELECT supplier_name_lookup as supplier, supplier_tier_lookup, ROUND(AVG(supplier_quality_score), 3) as supplier_quality_score, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM scrap_catalog.scrap_demo.scrap_by_supplier_gold WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY supplier_name_lookup, supplier_tier_lookup"
+        "SELECT supplier_name_lookup as supplier, supplier_tier_lookup, ROUND(AVG(supplier_quality_score), 3) as supplier_quality_score, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM main.scrap_demo.scrap_by_supplier_gold WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY supplier_name_lookup, supplier_tier_lookup"
       ]
     },
     {
       "name": "supplier_tier_scrap",
       "displayName": "Supplier Tier Scrap",
       "queryLines": [
-        "SELECT supplier_tier_lookup, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM scrap_catalog.scrap_demo.scrap_by_supplier_gold WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY supplier_tier_lookup"
+        "SELECT supplier_tier_lookup, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM main.scrap_demo.scrap_by_supplier_gold WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY supplier_tier_lookup"
       ]
     },
     {
       "name": "supplier_scorecard",
       "displayName": "Supplier Scorecard",
       "queryLines": [
-        "SELECT supplier_name_lookup as supplier, supplier_tier_lookup, ROUND(AVG(supplier_quality_score), 3) as supplier_quality_score, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost, COUNT(DISTINCT part_id) as parts_affected FROM scrap_catalog.scrap_demo.scrap_transactions_silver WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY supplier_name_lookup, supplier_tier_lookup ORDER BY total_scrap_cost DESC LIMIT 15"
+        "SELECT supplier_name_lookup as supplier, supplier_tier_lookup, ROUND(AVG(supplier_quality_score), 3) as supplier_quality_score, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost, COUNT(DISTINCT part_id) as parts_affected FROM main.scrap_demo.scrap_transactions_silver WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY supplier_name_lookup, supplier_tier_lookup ORDER BY total_scrap_cost DESC LIMIT 15"
       ]
     },
     {
       "name": "supplier_monthly_trend",
       "displayName": "Supplier Monthly Trend",
       "queryLines": [
-        "SELECT year_month, supplier_name_lookup as supplier, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM scrap_catalog.scrap_demo.scrap_by_supplier_gold WHERE supplier_name_lookup IN (SELECT supplier_name_lookup FROM scrap_catalog.scrap_demo.scrap_by_supplier_gold GROUP BY supplier_name_lookup ORDER BY SUM(total_scrap_cost) DESC LIMIT 5) GROUP BY year_month, supplier_name_lookup ORDER BY year_month"
+        "SELECT year_month, supplier_name_lookup as supplier, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM main.scrap_demo.scrap_by_supplier_gold WHERE supplier_name_lookup IN (SELECT supplier_name_lookup FROM main.scrap_demo.scrap_by_supplier_gold GROUP BY supplier_name_lookup ORDER BY SUM(total_scrap_cost) DESC LIMIT 5) GROUP BY year_month, supplier_name_lookup ORDER BY year_month"
       ]
     },
     {
       "name": "plant_performance",
       "displayName": "Plant Performance",
       "queryLines": [
-        "SELECT plant_name_lookup as plant, transaction_year as year, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost, ROUND(SUM(quantity_scrapped), 0) as quantity_scrapped FROM scrap_catalog.scrap_demo.scrap_by_plant_gold WHERE transaction_year >= YEAR(CURRENT_DATE()) - 1 GROUP BY plant_name_lookup, transaction_year"
+        "SELECT plant_name_lookup as plant, transaction_year as year, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost, ROUND(SUM(quantity_scrapped), 0) as quantity_scrapped FROM main.scrap_demo.scrap_by_plant_gold WHERE transaction_year >= YEAR(CURRENT_DATE()) - 1 GROUP BY plant_name_lookup, transaction_year"
       ]
     },
     {
       "name": "work_center_scrap",
       "displayName": "Work Center Scrap",
       "queryLines": [
-        "SELECT work_center_type_lookup, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM scrap_catalog.scrap_demo.scrap_by_work_center_gold WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY work_center_type_lookup ORDER BY total_scrap_cost DESC"
+        "SELECT work_center_type_lookup, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM main.scrap_demo.scrap_by_work_center_gold WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY work_center_type_lookup ORDER BY total_scrap_cost DESC"
       ]
     },
     {
       "name": "shift_plant_matrix",
       "displayName": "Shift Plant Matrix",
       "queryLines": [
-        "SELECT plant_name_lookup as plant, shift, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM scrap_catalog.scrap_demo.scrap_transactions_silver WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY plant_name_lookup, shift"
+        "SELECT plant_name_lookup as plant, shift, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM main.scrap_demo.scrap_transactions_silver WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY plant_name_lookup, shift"
       ]
     },
     {
       "name": "plant_monthly",
       "displayName": "Plant Monthly",
       "queryLines": [
-        "SELECT year_month, plant_name_lookup as plant, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM scrap_catalog.scrap_demo.scrap_by_plant_gold GROUP BY year_month, plant_name_lookup ORDER BY year_month"
+        "SELECT year_month, plant_name_lookup as plant, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM main.scrap_demo.scrap_by_plant_gold GROUP BY year_month, plant_name_lookup ORDER BY year_month"
       ]
     },
     {
       "name": "eight_d_summary",
       "displayName": "8D Summary",
       "queryLines": [
-        "SELECT * FROM scrap_catalog.scrap_demo.eight_d_reports_silver WHERE YEAR(date_opened) = YEAR(CURRENT_DATE())"
+        "SELECT * FROM main.scrap_demo.eight_d_reports_silver WHERE YEAR(date_opened) = YEAR(CURRENT_DATE())"
       ]
     },
     {
       "name": "eight_d_closure_rate",
       "displayName": "8D Closure Rate",
       "queryLines": [
-        "SELECT ROUND(SUM(CASE WHEN status = 'Closed' THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 1) as closure_rate FROM scrap_catalog.scrap_demo.eight_d_reports_silver WHERE YEAR(date_opened) = YEAR(CURRENT_DATE())"
+        "SELECT ROUND(SUM(CASE WHEN status = 'Closed' THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 1) as closure_rate FROM main.scrap_demo.eight_d_reports_silver WHERE YEAR(date_opened) = YEAR(CURRENT_DATE())"
       ]
     },
     {
       "name": "eight_d_timing",
       "displayName": "8D Timing",
       "queryLines": [
-        "SELECT ROUND(AVG(days_open), 1) as avg_days FROM scrap_catalog.scrap_demo.eight_d_reports_silver WHERE status = 'Closed' AND YEAR(date_opened) = YEAR(CURRENT_DATE())"
+        "SELECT ROUND(AVG(days_open), 1) as avg_days FROM main.scrap_demo.eight_d_reports_silver WHERE status = 'Closed' AND YEAR(date_opened) = YEAR(CURRENT_DATE())"
       ]
     },
     {
       "name": "eight_d_overdue",
       "displayName": "8D Overdue",
       "queryLines": [
-        "SELECT SUM(CASE WHEN is_overdue = true THEN 1 ELSE 0 END) as overdue_count FROM scrap_catalog.scrap_demo.eight_d_reports_silver WHERE YEAR(date_opened) = YEAR(CURRENT_DATE())"
+        "SELECT SUM(CASE WHEN is_overdue = true THEN 1 ELSE 0 END) as overdue_count FROM main.scrap_demo.eight_d_reports_silver WHERE YEAR(date_opened) = YEAR(CURRENT_DATE())"
       ]
     },
     {
       "name": "root_cause_breakdown",
       "displayName": "Root Cause Breakdown",
       "queryLines": [
-        "SELECT root_cause_category FROM scrap_catalog.scrap_demo.eight_d_reports_silver WHERE YEAR(date_opened) = YEAR(CURRENT_DATE())"
+        "SELECT root_cause_category FROM main.scrap_demo.eight_d_reports_silver WHERE YEAR(date_opened) = YEAR(CURRENT_DATE())"
       ]
     },
     {
       "name": "eight_d_severity",
       "displayName": "8D Severity",
       "queryLines": [
-        "SELECT severity, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM scrap_catalog.scrap_demo.eight_d_reports_silver WHERE YEAR(date_opened) = YEAR(CURRENT_DATE()) GROUP BY severity"
+        "SELECT severity, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM main.scrap_demo.eight_d_reports_silver WHERE YEAR(date_opened) = YEAR(CURRENT_DATE()) GROUP BY severity"
       ]
     },
     {
       "name": "eight_d_effectiveness",
       "displayName": "8D Effectiveness",
       "queryLines": [
-        "SELECT verification_result FROM scrap_catalog.scrap_demo.eight_d_reports_silver WHERE status = 'Closed' AND YEAR(date_opened) = YEAR(CURRENT_DATE())"
+        "SELECT verification_result FROM main.scrap_demo.eight_d_reports_silver WHERE status = 'Closed' AND YEAR(date_opened) = YEAR(CURRENT_DATE())"
       ]
     },
     {
       "name": "recent_8d_reports",
       "displayName": "Recent 8D Reports",
       "queryLines": [
-        "SELECT report_number, title, severity, status, days_open, plant_name_lookup as plant FROM scrap_catalog.scrap_demo.eight_d_reports_silver ORDER BY date_opened DESC LIMIT 15"
+        "SELECT report_number, title, severity, status, days_open, plant_name_lookup as plant FROM main.scrap_demo.eight_d_reports_silver ORDER BY date_opened DESC LIMIT 15"
       ]
     },
     {
       "name": "anomaly_summary",
       "displayName": "Anomaly Summary",
       "queryLines": [
-        "SELECT * FROM scrap_catalog.scrap_demo.scrap_transactions_silver WHERE cost_severity = 'Critical' AND transaction_date >= DATE_ADD(CURRENT_DATE(), -30)"
+        "SELECT * FROM main.scrap_demo.scrap_transactions_silver WHERE cost_severity = 'Critical' AND transaction_date >= DATE_ADD(CURRENT_DATE(), -30)"
       ]
     },
     {
       "name": "anomaly_timeline",
       "displayName": "Anomaly Timeline",
       "queryLines": [
-        "SELECT transaction_date, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM scrap_catalog.scrap_demo.scrap_daily_summary_gold WHERE transaction_date >= DATE_ADD(CURRENT_DATE(), -90) GROUP BY transaction_date ORDER BY transaction_date"
+        "SELECT transaction_date, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM main.scrap_demo.scrap_daily_summary_gold WHERE transaction_date >= DATE_ADD(CURRENT_DATE(), -90) GROUP BY transaction_date ORDER BY transaction_date"
       ]
     },
     {
       "name": "defect_clusters",
       "displayName": "Defect Clusters",
       "queryLines": [
-        "SELECT defect_category, ROUND(AVG(total_scrap_cost), 2) as total_scrap_cost, COUNT(*) as record_count FROM scrap_catalog.scrap_demo.scrap_transactions_silver WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY defect_category"
+        "SELECT defect_category, ROUND(AVG(total_scrap_cost), 2) as total_scrap_cost, COUNT(*) as record_count FROM main.scrap_demo.scrap_transactions_silver WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY defect_category"
       ]
     },
     {
       "name": "recent_anomalies",
       "displayName": "Recent Anomalies",
       "queryLines": [
-        "SELECT transaction_date, plant_name_lookup as plant, defect_category, ROUND(total_scrap_cost, 2) as total_scrap_cost, quantity_scrapped FROM scrap_catalog.scrap_demo.scrap_transactions_silver WHERE cost_severity = 'Critical' ORDER BY transaction_date DESC LIMIT 20"
+        "SELECT transaction_date, plant_name_lookup as plant, defect_category, ROUND(total_scrap_cost, 2) as total_scrap_cost, quantity_scrapped FROM main.scrap_demo.scrap_transactions_silver WHERE cost_severity = 'Critical' ORDER BY transaction_date DESC LIMIT 20"
       ]
     }
   ],

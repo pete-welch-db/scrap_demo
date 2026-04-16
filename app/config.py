@@ -14,6 +14,47 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def _normalize_workspace_hostname(raw: str) -> str:
+    """Strip scheme/path so we store hostname only (used by SQL connector + URLs)."""
+    h = (raw or "").strip()
+    if h.startswith("https://"):
+        h = h[8:]
+    elif h.startswith("http://"):
+        h = h[7:]
+    return h.split("/")[0].rstrip("/") if h else h
+
+
+def _resolve_dashboard_embed_url() -> str:
+    """
+    Lakeview iframe URL for the Overview tab. Prefer bundle env; fallback by workspace host in DBX
+    so a missing DASHBOARD_EMBED_URL does not default to another workspace's dashboard.
+    """
+    explicit = (os.getenv("DASHBOARD_EMBED_URL") or "").strip()
+    if explicit:
+        return explicit
+    host = (os.getenv("DATABRICKS_HOST") or "").lower()
+    if "fe-sandbox-scrapdemo" in host:
+        return (
+            "https://fe-sandbox-scrapdemo.cloud.databricks.com/embed/dashboardsv3/"
+            "01f139950183152e8edd316ba291a8ad?o=7474659424822813"
+        )
+    return (
+        "https://fe-vm-industry-solutions-buildathon.cloud.databricks.com/embed/dashboardsv3/"
+        "01f12de4304e1749a624a5c3b218b708?o=237438879023004"
+    )
+
+
+def _resolve_sql_http_path() -> str:
+    """Prefer explicit path; else build from DATABRICKS_WAREHOUSE_ID (set in Databricks Apps with SQL warehouse)."""
+    explicit = os.getenv("DATABRICKS_HTTP_PATH", "").strip()
+    if explicit:
+        return explicit if explicit.startswith("/") else f"/{explicit}"
+    wh = os.getenv("DATABRICKS_WAREHOUSE_ID", "").strip()
+    if wh:
+        return f"/sql/1.0/warehouses/{wh}"
+    return "/sql/1.0/warehouses/288a7ec183eea397"
+
+
 @dataclass
 class DatabricksConfig:
     """Databricks connection configuration."""
@@ -28,16 +69,23 @@ class DatabricksConfig:
     def from_env(cls) -> "DatabricksConfig":
         """Create configuration from environment variables."""
         return cls(
-            host=os.getenv("DATABRICKS_HOST", "fe-vm-industry-solutions-buildathon.cloud.databricks.com"),
-            http_path=os.getenv("DATABRICKS_HTTP_PATH", "/sql/1.0/warehouses/288a7ec183eea397"),
+            host=_normalize_workspace_hostname(
+                os.getenv(
+                    "DATABRICKS_HOST",
+                    "fe-vm-industry-solutions-buildathon.cloud.databricks.com",
+                )
+            ),
+            http_path=_resolve_sql_http_path(),
             token=os.getenv("DATABRICKS_TOKEN", ""),
-            catalog=os.getenv("DATABRICKS_CATALOG", "scrap_catalog"),
+            # Defaults match bundle sandbox (main.scrap_demo). Override in .env for other workspaces.
+            catalog=os.getenv("DATABRICKS_CATALOG", "main"),
             schema=os.getenv("DATABRICKS_SCHEMA", "scrap_demo"),
-            dashboard_embed_url=os.getenv(
-                "DASHBOARD_EMBED_URL",
-                "https://fe-vm-industry-solutions-buildathon.cloud.databricks.com/embed/dashboardsv3/01f0f2f3a9291b8995a13619abf2528e?o=237438879023004"
-            )
+            dashboard_embed_url=_resolve_dashboard_embed_url()
         )
+
+    def sdk_host_url(self) -> str:
+        """Host URL for databricks SDK Config (expects https URL)."""
+        return f"https://{self.host}" if self.host and not self.host.startswith("http") else self.host
     
     @property
     def full_schema(self) -> str:
@@ -53,21 +101,46 @@ class DatabricksConfig:
         return bool(self.host and (has_token or has_oauth))
 
 
+def get_genie_space_id() -> Optional[str]:
+    """Read Genie space id at call time (Apps may inject via valueFrom from the genie-space resource)."""
+    v = (os.getenv("GENIE_SPACE_ID") or "").strip()
+    if v and v.lower() != "none":
+        return v
+    return None
+
+
+def get_sdk_workspace_url() -> str:
+    """
+    Workspace root URL for Databricks SDK OAuth (OIDC discovery). Prefer DATABRICKS_HOST from Apps runtime.
+    """
+    raw = (os.getenv("DATABRICKS_HOST") or "").strip()
+    if raw.startswith("https://"):
+        return raw.rstrip("/")
+    if raw.startswith("http://"):
+        return "https://" + raw[7:].split("/")[0].rstrip("/")
+    if raw:
+        return f"https://{raw.split('/')[0].rstrip('/')}"
+    return DatabricksConfig.from_env().sdk_host_url()
+
+
 @dataclass
 class GenieConfig:
     """Databricks Genie configuration."""
+
     space_id: Optional[str]
     space_name: str = "Scrap Analytics Assistant"
-    
+
     @classmethod
     def from_env(cls) -> "GenieConfig":
-        return cls(
-            space_id=os.getenv("GENIE_SPACE_ID", "01f0ee7c90c9160b80fd7567dc1e3fca"),
-            space_name="Scrap Analytics Assistant"
-        )
-    
+        # DBX: prefer runtime GENIE_SPACE_ID (Apps + valueFrom). Local dev: optional .env or legacy default.
+        env = os.getenv("ENVIRONMENT", "LOCAL").upper()
+        sid = get_genie_space_id()
+        if sid is None and env != "DBX":
+            sid = "01f0ee7c90c9160b80fd7567dc1e3fca"
+        return cls(space_id=sid, space_name="Scrap Analytics Assistant")
+
     def is_configured(self) -> bool:
-        return bool(self.space_id)
+        return bool(get_genie_space_id())
 
 
 @dataclass

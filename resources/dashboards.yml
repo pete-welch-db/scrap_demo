@@ -12,8 +12,8 @@ resources:
     executive_scrap_dashboard:
       display_name: "[${bundle.target}] Executive Scrap Dashboard"
       
-      # Path to the dashboard definition file
-      file_path: ../Dashboards/Executive_Scrap_Dashboard.lvdash.json
+      # Path to the dashboard definition file (sandbox: Executive_Scrap_Dashboard.main.lvdash.json → main.scrap_demo)
+      file_path: ../Dashboards/${var.dashboard_definition_file}
       
       # Warehouse for dashboard queries
       warehouse_id: ${var.warehouse_id}

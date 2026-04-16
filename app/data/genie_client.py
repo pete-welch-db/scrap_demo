@@ -6,12 +6,25 @@ Client for interacting with Databricks Genie conversational AI.
 API Reference: https://docs.databricks.com/api/azure/workspace/genie
 """
 
+import os
 import requests
 import time
 import streamlit as st
 from typing import Optional, Dict, Any, Tuple, List
 from dataclasses import dataclass
-from config import databricks_config, genie_config
+from config import databricks_config, genie_config, get_genie_space_id, get_sdk_workspace_url
+
+
+def _normalize_host_for_api() -> str:
+    """Bare workspace hostname for REST URLs (DATABRICKS_HOST may include https://)."""
+    h = (os.getenv("DATABRICKS_HOST") or "").strip()
+    if h.startswith("https://"):
+        return h[8:].split("/")[0].rstrip("/")
+    if h.startswith("http://"):
+        return h[7:].split("/")[0].rstrip("/")
+    if h:
+        return h.split("/")[0].rstrip("/")
+    return databricks_config.host
 
 
 @dataclass
@@ -30,11 +43,12 @@ class GenieClient:
 
     def __init__(self):
         from config import app_config
-        import os
 
-        self.base_url = f"https://{databricks_config.host}/api/2.0/genie/spaces"
-        self.sql_base_url = f"https://{databricks_config.host}/api/2.0/sql/statements"
-        self.space_id = genie_config.space_id
+        host = _normalize_host_for_api()
+        self.base_url = f"https://{host}/api/2.0/genie/spaces"
+        self.sql_base_url = f"https://{host}/api/2.0/sql/statements"
+        # Always read from env (bundle valueFrom injects GENIE_SPACE_ID at runtime)
+        self.space_id = get_genie_space_id()
 
         # Get token based on environment
         token = self._get_token(app_config)
@@ -48,19 +62,25 @@ class GenieClient:
 
     def _get_token(self, app_config) -> str:
         """Get authentication token based on environment."""
-        import os
-
         if app_config.is_local():
             # LOCAL: Use personal access token
             print("[DEBUG] GenieClient: Using LOCAL auth")
             return databricks_config.token
         else:
-            # DBX: Get token from SDK Config OAuth M2M
+            # DBX: OAuth M2M (same credentials as SQL connector)
             print("[DEBUG] GenieClient: Using DBX service principal auth")
             from databricks.sdk.core import Config
 
-            cfg = Config(host=databricks_config.host)
-            cfg.authenticate()
+            cid = os.getenv("DATABRICKS_CLIENT_ID")
+            csec = os.getenv("DATABRICKS_CLIENT_SECRET")
+            if not cid or not csec:
+                raise ValueError("DATABRICKS_CLIENT_ID and DATABRICKS_CLIENT_SECRET must be set in Databricks Apps.")
+
+            cfg = Config(
+                host=get_sdk_workspace_url(),
+                client_id=cid,
+                client_secret=csec,
+            )
             token = cfg.oauth_token().access_token
 
             if not token:
@@ -99,6 +119,18 @@ class GenieClient:
     
     def start_conversation(self, content: str) -> Tuple[str, str, Optional[GenieResponse]]:
         """Start a new conversation with Genie."""
+        if not self.space_id:
+            return (
+                None,
+                None,
+                GenieResponse(
+                    content=(
+                        "❌ Genie space is not configured: **GENIE_SPACE_ID** is missing. "
+                        "Redeploy the app with the bundle (Genie resource + `valueFrom: genie-space`) "
+                        "and ensure the app service principal has **CAN RUN** on the Genie space."
+                    )
+                ),
+            )
         response = self._genie_request("POST", "start-conversation", {"content": content})
         
         if "error" in response:
@@ -315,8 +347,11 @@ class GenieClient:
 _genie_client: Optional[GenieClient] = None
 
 def get_genie_client() -> GenieClient:
-    """Get or create the Genie client singleton."""
+    """Get or create the Genie client singleton (recreate if GENIE_SPACE_ID changes)."""
     global _genie_client
+    sid = get_genie_space_id()
+    if _genie_client is not None and getattr(_genie_client, "space_id", None) != sid:
+        _genie_client = None
     if _genie_client is None:
         _genie_client = GenieClient()
     return _genie_client

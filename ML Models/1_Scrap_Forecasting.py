@@ -116,6 +116,19 @@ CATALOG = dbutils.widgets.get("catalog")
 SCHEMA = dbutils.widgets.get("schema")
 FULL_SCHEMA = f"{CATALOG}.{SCHEMA}"
 
+# Align the Spark session with job parameters (sandbox uses `main`, not `scrap_catalog`).
+spark.sql(f"USE CATALOG `{CATALOG.replace('`', '')}`")
+spark.sql(f"USE SCHEMA `{SCHEMA.replace('`', '')}`")
+
+
+def _table_ready(name: str) -> bool:
+    try:
+        spark.table(name).limit(1).collect()
+        return True
+    except Exception:
+        return False
+
+
 print(f"Using catalog: {CATALOG}, schema: {SCHEMA}")
 
 # Forecasting Configuration
@@ -2983,30 +2996,42 @@ with mlflow.start_run(run_name="register_production_model") as run:
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC -- Next 30 days forecast summary by entity type
-# MAGIC WITH plant_forecast AS (
-# MAGIC     SELECT 'Plant' as entity_type, entity_name, 
-# MAGIC            SUM(predicted_cost) as total_predicted,
-# MAGIC            SUM(lower_bound) as total_lower,
-# MAGIC            SUM(upper_bound) as total_upper
-# MAGIC     FROM scrap_catalog.scrap_demo.ml_plant_forecast_results
-# MAGIC     WHERE forecast_date <= DATE_ADD(CURRENT_DATE(), 30)
-# MAGIC     GROUP BY entity_name
-# MAGIC ),
-# MAGIC supplier_forecast AS (
-# MAGIC     SELECT 'Supplier' as entity_type, entity_name,
-# MAGIC            SUM(predicted_cost) as total_predicted,
-# MAGIC            SUM(lower_bound) as total_lower,
-# MAGIC            SUM(upper_bound) as total_upper
-# MAGIC     FROM scrap_catalog.scrap_demo.ml_supplier_forecast_results
-# MAGIC     WHERE forecast_date <= DATE_ADD(CURRENT_DATE(), 30)
-# MAGIC     GROUP BY entity_name
-# MAGIC )
-# MAGIC SELECT * FROM plant_forecast
-# MAGIC UNION ALL
-# MAGIC SELECT * FROM supplier_forecast
-# MAGIC ORDER BY entity_type, total_predicted DESC
+_plant_tbl = f"{FULL_SCHEMA}.ml_plant_forecast_results"
+_sup_tbl = f"{FULL_SCHEMA}.ml_supplier_forecast_results"
+if _table_ready(_plant_tbl) and _table_ready(_sup_tbl):
+    display(
+        spark.sql(
+            f"""
+WITH plant_forecast AS (
+    SELECT 'Plant' as entity_type, entity_name,
+           SUM(predicted_cost) as total_predicted,
+           SUM(lower_bound) as total_lower,
+           SUM(upper_bound) as total_upper
+    FROM {FULL_SCHEMA}.ml_plant_forecast_results
+    WHERE forecast_date <= DATE_ADD(CURRENT_DATE(), 30)
+    GROUP BY entity_name
+),
+supplier_forecast AS (
+    SELECT 'Supplier' as entity_type, entity_name,
+           SUM(predicted_cost) as total_predicted,
+           SUM(lower_bound) as total_lower,
+           SUM(upper_bound) as total_upper
+    FROM {FULL_SCHEMA}.ml_supplier_forecast_results
+    WHERE forecast_date <= DATE_ADD(CURRENT_DATE(), 30)
+    GROUP BY entity_name
+)
+SELECT * FROM plant_forecast
+UNION ALL
+SELECT * FROM supplier_forecast
+ORDER BY entity_type, total_predicted DESC
+"""
+        )
+    )
+else:
+    print(
+        f"Skipping 30-day forecast summary (tables missing or empty): {_plant_tbl}, {_sup_tbl}. "
+        "Plant/supplier models may be disabled or training produced no forecasts."
+    )
 
 # COMMAND ----------
 
@@ -3365,20 +3390,28 @@ else:
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC -- View latest drift monitoring results
-# MAGIC SELECT 
-# MAGIC   model_type,
-# MAGIC   entity_name,
-# MAGIC   data_drift_detected,
-# MAGIC   ROUND(data_drift_score, 4) as drift_score,
-# MAGIC   model_drift_detected,
-# MAGIC   ROUND(model_avg_degradation_pct, 2) as avg_degradation_pct,
-# MAGIC   requires_retraining,
-# MAGIC   monitoring_timestamp
-# MAGIC FROM scrap_catalog.scrap_demo.ml_drift_monitoring_results
-# MAGIC WHERE monitoring_timestamp >= CURRENT_TIMESTAMP() - INTERVAL 7 DAYS
-# MAGIC ORDER BY drift_score DESC, avg_degradation_pct DESC
+_drift_tbl = f"{FULL_SCHEMA}.ml_drift_monitoring_results"
+if _table_ready(_drift_tbl):
+    display(
+        spark.sql(
+            f"""
+SELECT
+  model_type,
+  entity_name,
+  data_drift_detected,
+  ROUND(data_drift_score, 4) as drift_score,
+  model_drift_detected,
+  ROUND(model_avg_degradation_pct, 2) as avg_degradation_pct,
+  requires_retraining,
+  monitoring_timestamp
+FROM {FULL_SCHEMA}.ml_drift_monitoring_results
+WHERE monitoring_timestamp >= CURRENT_TIMESTAMP() - INTERVAL 7 DAYS
+ORDER BY drift_score DESC, avg_degradation_pct DESC
+"""
+        )
+    )
+else:
+    print(f"Skipping drift monitoring query — table not found: {_drift_tbl}")
 
 # COMMAND ----------
 

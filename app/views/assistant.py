@@ -7,7 +7,7 @@ API Reference: https://docs.databricks.com/api/azure/workspace/genie
 """
 
 import streamlit as st
-from config import genie_config, databricks_config
+from config import genie_config, databricks_config, get_genie_space_id
 from data.genie_client import get_genie_client, GenieResponse
 
 
@@ -75,7 +75,12 @@ Ask me anything about your scrap data!""",
             }
         ]
     
-    if "genie_client" not in st.session_state:
+    # Refresh client if GENIE_SPACE_ID was injected after first run (bundle valueFrom)
+    _sid = get_genie_space_id()
+    if (
+        "genie_client" not in st.session_state
+        or getattr(st.session_state.genie_client, "space_id", None) != _sid
+    ):
         st.session_state.genie_client = get_genie_client()
     
     if "processing" not in st.session_state:

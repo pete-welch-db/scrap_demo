@@ -7,22 +7,10 @@ description: Scrap Reduction Intelligence Platform - Dashboards, What-If Analysi
 # Entry point
 command: ["streamlit", "run", "app.py"]
 
-# Environment variables
+# Environment variables (DATABRICKS_HOST is set by Apps runtime; catalog/schema/warehouse path from bundle `config.env`)
 env:
   - name: ENVIRONMENT
     value: "DBX"
-  - name: DATABRICKS_HOST
-    value: "fe-vm-industry-solutions-buildathon.cloud.databricks.com"
-  - name: DATABRICKS_HTTP_PATH
-    value: "/sql/1.0/warehouses/288a7ec183eea397"
-  - name: DATABRICKS_CATALOG
-    value: "scrap_catalog"
-  - name: DATABRICKS_SCHEMA
-    value: "scrap_demo"
-  - name: GENIE_SPACE_ID
-    value: "01f0ee7c90c9160b80fd7567dc1e3fca"
-  - name: DASHBOARD_EMBED_URL
-    value: "https://fe-vm-industry-solutions-buildathon.cloud.databricks.com/embed/dashboardsv3/01f12de4304e1749a624a5c3b218b708?o=237438879023004"
 
 # Environment variables are automatically set by Databricks Apps runtime
 # (DATABRICKS_HOST, DATABRICKS_TOKEN, DATABRICKS_WAREHOUSE_ID)

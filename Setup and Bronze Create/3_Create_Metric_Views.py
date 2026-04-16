@@ -9,9 +9,12 @@
 # Parameters
 dbutils.widgets.text("catalog", "scrap_catalog", "Catalog")
 dbutils.widgets.text("schema", "scrap_demo", "Schema")
+# Optional: OAuth client ID of the Databricks App SP for GRANT on metric views (per workspace). Leave empty to skip.
+dbutils.widgets.text("app_service_principal_id", "", "App SP client id for GRANT (optional)")
 
 CATALOG = dbutils.widgets.get("catalog")
 SCHEMA = dbutils.widgets.get("schema")
+APP_SP_ID = (dbutils.widgets.get("app_service_principal_id") or "").strip()
 
 spark.sql(f"USE CATALOG {CATALOG}")
 spark.sql(f"USE SCHEMA {SCHEMA}")
@@ -212,16 +215,19 @@ print("Created: eight_d_quality_metrics")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Grant SP Access to Metric Views
+# MAGIC ## Grant SP Access to Metric Views (optional)
 
 # COMMAND ----------
 
-# Grant the app service principal SELECT on the metric views
-SP_CLIENT_ID = "cb92b8a6-f086-4365-9bce-17c57aedfa1e"
-
-for mv in ["scrap_operations_metrics", "supplier_quality_metrics", "eight_d_quality_metrics"]:
-    spark.sql(f"GRANT SELECT ON VIEW {CATALOG}.{SCHEMA}.{mv} TO `{SP_CLIENT_ID}`")
-    print(f"Granted SELECT on {mv} to app SP")
+if APP_SP_ID:
+    for mv in ["scrap_operations_metrics", "supplier_quality_metrics", "eight_d_quality_metrics"]:
+        spark.sql(f"GRANT SELECT ON VIEW {CATALOG}.{SCHEMA}.{mv} TO `{APP_SP_ID}`")
+        print(f"Granted SELECT on {mv} to app SP")
+else:
+    print(
+        "Skipping GRANT on metric views (app_service_principal_id not set). "
+        "Use scripts/grant_app_uc_access.py after deploy or set job base_parameters."
+    )
 
 # COMMAND ----------
 

@@ -575,12 +575,12 @@ def render_ml_insights_page():
         
         # Model info
         with st.expander("ℹ️ Model Information"):
-            st.markdown("""
+            st.markdown(f"""
             **Model Type:** Facebook Prophet  
             **Training Data:** 3 years of historical scrap data  
             **Seasonality:** Yearly, Weekly, Holiday effects  
             **Forecast Horizon:** 90 days  
-            **Registered Model:** `scrap_catalog.scrap_demo.scrap_total_forecast_model`
+            **Registered Model:** `{SCHEMA}.scrap_total_forecast_model`
             """)
     
     # =========================================================================
@@ -852,16 +852,16 @@ def render_ml_insights_page():
         
         # MLflow info
         with st.expander("ℹ️ Model Registry Information"):
-            st.markdown("""
+            st.markdown(f"""
             **Registered Models in Unity Catalog:**
             
             | Model | Purpose | Status |
             |-------|---------|--------|
-            | `scrap_catalog.scrap_demo.scrap_total_forecast_model` | Time series forecasting | ✅ Production |
-            | `scrap_catalog.scrap_demo.root_cause_classifier` | Root cause prediction | ✅ Production |
-            | `scrap_catalog.scrap_demo.anomaly_detector` | Anomaly detection | ✅ Production |
-            | `scrap_catalog.scrap_demo.supplier_risk_scorer` | Risk assessment | ✅ Production |
-            | `scrap_catalog.scrap_demo.supplier_reallocation_optimizer` | Reallocation recommendations | ✅ Production |
+            | `{SCHEMA}.scrap_total_forecast_model` | Time series forecasting | ✅ Production |
+            | `{SCHEMA}.root_cause_classifier` | Root cause prediction | ✅ Production |
+            | `{SCHEMA}.anomaly_detector` | Anomaly detection | ✅ Production |
+            | `{SCHEMA}.supplier_risk_scorer` | Risk assessment | ✅ Production |
+            | `{SCHEMA}.supplier_reallocation_optimizer` | Reallocation recommendations | ✅ Production |
             
             **MLflow Experiment:** Default Notebook Experiment (Git folder)
             """)

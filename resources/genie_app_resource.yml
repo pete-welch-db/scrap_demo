@@ -1,0 +1,3 @@
+# Placeholder: Genie app attachment lives in resources/apps.yml (genie_space block).
+# This file remains so older docs/scripts references still resolve; do not redefine apps here.
+resources: {}

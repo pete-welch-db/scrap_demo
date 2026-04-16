@@ -512,12 +512,12 @@ def render_dashboard_page():
         
         # Model info
         with st.expander("ℹ️ Model Information"):
-            st.markdown("""
+            st.markdown(f"""
             **Model Type:** Facebook Prophet  
             **Training Data:** 3 years of historical scrap data  
             **Seasonality:** Yearly, Weekly, Holiday effects  
             **Forecast Horizon:** 90 days  
-            **Registered Model:** `scrap_catalog.scrap_demo.scrap_total_forecast_model`
+            **Registered Model:** `{SCHEMA}.scrap_total_forecast_model`
             """)
     
     # =========================================================================
