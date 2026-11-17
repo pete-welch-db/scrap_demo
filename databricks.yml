@@ -75,6 +75,30 @@ targets:
       host: https://fe-sandbox-scrapdemo.cloud.databricks.com
       profile: fe-sandbox-scrapdemo
 
+  # FEVM serverless workspace (kz434h) — Buildathon demo; first deployed by Brien 11/17
+  # root_path points at the original bundle folder so redeploys update the same resources in place.
+  kz434h:
+    # No `mode: development`: dev mode requires root_path under the deploying user's folder.
+    variables:
+      catalog: serverless_stable_kz434h_catalog
+      schema: scrap_demo
+      warehouse_id: 703d0e9050265b23
+      dashboard_embed_url: "https://fevm-serverless-stable-kz434h.cloud.databricks.com/embed/dashboardsv3/01f1e284fb5c16049958c70d303e8bc0?o=7474653072953429"
+      dashboard_definition_file: Executive_Scrap_Dashboard.kz434h.lvdash.json
+      # Set by scripts/deploy_genie_space.py (create/update); update here if the space is recreated
+      genie_space_id: "01f1e285bf6813d9812cfaac98c19a31"
+    workspace:
+      host: https://fevm-serverless-stable-kz434h.cloud.databricks.com
+      profile: fevm-scrap-demo
+      root_path: /Workspace/Users/brien.blandfordlevy@databricks.com/.bundle/${bundle.name}
+    # Pipeline owner stays Brien (only a metastore admin can change a pipeline owner)
+    resources:
+      pipelines:
+        scrap_dlt_pipeline:
+          permissions:
+            - level: IS_OWNER
+              user_name: brien.blandfordlevy@databricks.com
+
   # Azure workspace environment
   azure:
     mode: development

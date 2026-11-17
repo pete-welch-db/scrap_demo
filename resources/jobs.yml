@@ -30,6 +30,8 @@ resources:
           user_name: ${workspace.current_user.userName}
         - level: CAN_MANAGE
           user_name: pete.welch@databricks.com
+        - level: CAN_VIEW
+          group_name: users
 
       # Define serverless environment
       environments:
@@ -78,6 +80,8 @@ resources:
           user_name: ${workspace.current_user.userName}
         - level: CAN_MANAGE
           user_name: pete.welch@databricks.com
+        - level: CAN_VIEW
+          group_name: users
       # Define serverless environment for ML tasks
       environments:
         - environment_key: ml

@@ -20,3 +20,10 @@ resources:
       
       # Embed credentials for shared viewing
       embed_credentials: true
+
+      # Workspace users need CAN_VIEW for the dashboard embedded in the app
+      permissions:
+        - level: CAN_MANAGE
+          user_name: ${workspace.current_user.userName}
+        - level: CAN_READ
+          group_name: users

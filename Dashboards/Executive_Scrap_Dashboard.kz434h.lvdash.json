@@ -1,0 +1,2715 @@
+{
+  "datasets": [
+    {
+      "name": "ytd_kpis",
+      "displayName": "YTD KPIs",
+      "queryLines": [
+        "SELECT MEASURE(`YTD Scrap Cost`) as total_scrap_cost, MEASURE(`YTD Units Scrapped`) as total_qty_scrapped FROM serverless_stable_kz434h_catalog.scrap_demo.scrap_operations_metrics"
+      ]
+    },
+    {
+      "name": "eight_d_status",
+      "displayName": "8D Status",
+      "queryLines": [
+        "SELECT MEASURE(`Open Reports`) as open_count FROM serverless_stable_kz434h_catalog.scrap_demo.eight_d_quality_metrics"
+      ]
+    },
+    {
+      "name": "supplier_quality_avg",
+      "displayName": "Supplier Quality Average",
+      "queryLines": [
+        "SELECT MEASURE(`Avg Quality Score`) as avg_quality FROM serverless_stable_kz434h_catalog.scrap_demo.supplier_quality_metrics"
+      ]
+    },
+    {
+      "name": "monthly_trend",
+      "displayName": "Monthly Scrap Trend",
+      "queryLines": [
+        "SELECT `Transaction Month` as year_month, `Transaction Year` as year, MEASURE(`Total Scrap Cost`) as total_scrap_cost, MEASURE(`Total Units Scrapped`) as total_quantity_scrapped FROM serverless_stable_kz434h_catalog.scrap_demo.scrap_operations_metrics GROUP BY `Transaction Month`, `Transaction Year` ORDER BY year_month"
+      ]
+    },
+    {
+      "name": "plant_ytd_summary",
+      "displayName": "Plant YTD Summary",
+      "queryLines": [
+        "SELECT `Plant` as plant, MEASURE(`YTD Scrap Cost`) as total_scrap_cost FROM serverless_stable_kz434h_catalog.scrap_demo.scrap_operations_metrics GROUP BY `Plant`"
+      ]
+    },
+    {
+      "name": "defect_pareto",
+      "displayName": "Defect Pareto",
+      "queryLines": [
+        "SELECT defect_category, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM serverless_stable_kz434h_catalog.scrap_demo.scrap_by_defect_gold WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY defect_category ORDER BY total_scrap_cost DESC LIMIT 10"
+      ]
+    },
+    {
+      "name": "shift_breakdown",
+      "displayName": "Shift Breakdown",
+      "queryLines": [
+        "SELECT shift, plant_name_lookup as plant, ROUND(SUM(quantity_scrapped), 0) as quantity_scrapped FROM serverless_stable_kz434h_catalog.scrap_demo.scrap_transactions_silver WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY shift, plant_name_lookup"
+      ]
+    },
+    {
+      "name": "top_scrap_parts",
+      "displayName": "Top Scrap Parts",
+      "queryLines": [
+        "SELECT part_id, part_name_lookup, supplier_name_lookup as supplier, plant_name_lookup as plant, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost, ROUND(SUM(quantity_scrapped), 0) as quantity_scrapped FROM serverless_stable_kz434h_catalog.scrap_demo.scrap_transactions_silver WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY part_id, part_name_lookup, supplier_name_lookup, plant_name_lookup ORDER BY total_scrap_cost DESC LIMIT 10"
+      ]
+    },
+    {
+      "name": "plant_forecast",
+      "displayName": "Plant Forecast",
+      "queryLines": [
+        "SELECT year_month, plant_name_lookup as plant, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM serverless_stable_kz434h_catalog.scrap_demo.scrap_by_plant_gold GROUP BY year_month, plant_name_lookup ORDER BY year_month"
+      ]
+    },
+    {
+      "name": "supplier_forecast",
+      "displayName": "Supplier Forecast",
+      "queryLines": [
+        "SELECT supplier_name_lookup as supplier, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM serverless_stable_kz434h_catalog.scrap_demo.scrap_by_supplier_gold WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY supplier_name_lookup ORDER BY total_scrap_cost DESC LIMIT 10"
+      ]
+    },
+    {
+      "name": "seasonal_patterns",
+      "displayName": "Seasonal Patterns",
+      "queryLines": [
+        "SELECT transaction_month, day_name, ROUND(AVG(total_scrap_cost), 2) as total_scrap_cost FROM serverless_stable_kz434h_catalog.scrap_demo.scrap_daily_summary_gold GROUP BY transaction_month, day_name"
+      ]
+    },
+    {
+      "name": "feature_importance",
+      "displayName": "Feature Importance",
+      "queryLines": [
+        "SELECT defect_category, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM serverless_stable_kz434h_catalog.scrap_demo.scrap_by_defect_gold GROUP BY defect_category ORDER BY total_scrap_cost DESC LIMIT 8"
+      ]
+    },
+    {
+      "name": "supplier_risk",
+      "displayName": "Supplier Risk",
+      "queryLines": [
+        "SELECT DISTINCT supplier_id, supplier_name_lookup as supplier, ROUND(supplier_quality_score, 3) as supplier_quality_score FROM serverless_stable_kz434h_catalog.scrap_demo.scrap_transactions_silver WHERE supplier_quality_score < 0.85"
+      ]
+    },
+    {
+      "name": "supplier_quality_scrap",
+      "displayName": "Supplier Quality vs Scrap",
+      "queryLines": [
+        "SELECT supplier_name_lookup as supplier, supplier_tier_lookup, ROUND(AVG(supplier_quality_score), 3) as supplier_quality_score, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM serverless_stable_kz434h_catalog.scrap_demo.scrap_by_supplier_gold WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY supplier_name_lookup, supplier_tier_lookup"
+      ]
+    },
+    {
+      "name": "supplier_tier_scrap",
+      "displayName": "Supplier Tier Scrap",
+      "queryLines": [
+        "SELECT supplier_tier_lookup, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM serverless_stable_kz434h_catalog.scrap_demo.scrap_by_supplier_gold WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY supplier_tier_lookup"
+      ]
+    },
+    {
+      "name": "supplier_scorecard",
+      "displayName": "Supplier Scorecard",
+      "queryLines": [
+        "SELECT supplier_name_lookup as supplier, supplier_tier_lookup, ROUND(AVG(supplier_quality_score), 3) as supplier_quality_score, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost, COUNT(DISTINCT part_id) as parts_affected FROM serverless_stable_kz434h_catalog.scrap_demo.scrap_transactions_silver WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY supplier_name_lookup, supplier_tier_lookup ORDER BY total_scrap_cost DESC LIMIT 15"
+      ]
+    },
+    {
+      "name": "supplier_monthly_trend",
+      "displayName": "Supplier Monthly Trend",
+      "queryLines": [
+        "SELECT year_month, supplier_name_lookup as supplier, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM serverless_stable_kz434h_catalog.scrap_demo.scrap_by_supplier_gold WHERE supplier_name_lookup IN (SELECT supplier_name_lookup FROM serverless_stable_kz434h_catalog.scrap_demo.scrap_by_supplier_gold GROUP BY supplier_name_lookup ORDER BY SUM(total_scrap_cost) DESC LIMIT 5) GROUP BY year_month, supplier_name_lookup ORDER BY year_month"
+      ]
+    },
+    {
+      "name": "plant_performance",
+      "displayName": "Plant Performance",
+      "queryLines": [
+        "SELECT plant_name_lookup as plant, transaction_year as year, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost, ROUND(SUM(quantity_scrapped), 0) as quantity_scrapped FROM serverless_stable_kz434h_catalog.scrap_demo.scrap_by_plant_gold WHERE transaction_year >= YEAR(CURRENT_DATE()) - 1 GROUP BY plant_name_lookup, transaction_year"
+      ]
+    },
+    {
+      "name": "work_center_scrap",
+      "displayName": "Work Center Scrap",
+      "queryLines": [
+        "SELECT work_center_type_lookup, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM serverless_stable_kz434h_catalog.scrap_demo.scrap_by_work_center_gold WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY work_center_type_lookup ORDER BY total_scrap_cost DESC"
+      ]
+    },
+    {
+      "name": "shift_plant_matrix",
+      "displayName": "Shift Plant Matrix",
+      "queryLines": [
+        "SELECT plant_name_lookup as plant, shift, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM serverless_stable_kz434h_catalog.scrap_demo.scrap_transactions_silver WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY plant_name_lookup, shift"
+      ]
+    },
+    {
+      "name": "plant_monthly",
+      "displayName": "Plant Monthly",
+      "queryLines": [
+        "SELECT year_month, plant_name_lookup as plant, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM serverless_stable_kz434h_catalog.scrap_demo.scrap_by_plant_gold GROUP BY year_month, plant_name_lookup ORDER BY year_month"
+      ]
+    },
+    {
+      "name": "eight_d_summary",
+      "displayName": "8D Summary",
+      "queryLines": [
+        "SELECT * FROM serverless_stable_kz434h_catalog.scrap_demo.eight_d_reports_silver WHERE YEAR(date_opened) = YEAR(CURRENT_DATE())"
+      ]
+    },
+    {
+      "name": "eight_d_closure_rate",
+      "displayName": "8D Closure Rate",
+      "queryLines": [
+        "SELECT ROUND(SUM(CASE WHEN status = 'Closed' THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 1) as closure_rate FROM serverless_stable_kz434h_catalog.scrap_demo.eight_d_reports_silver WHERE YEAR(date_opened) = YEAR(CURRENT_DATE())"
+      ]
+    },
+    {
+      "name": "eight_d_timing",
+      "displayName": "8D Timing",
+      "queryLines": [
+        "SELECT ROUND(AVG(days_open), 1) as avg_days FROM serverless_stable_kz434h_catalog.scrap_demo.eight_d_reports_silver WHERE status = 'Closed' AND YEAR(date_opened) = YEAR(CURRENT_DATE())"
+      ]
+    },
+    {
+      "name": "eight_d_overdue",
+      "displayName": "8D Overdue",
+      "queryLines": [
+        "SELECT SUM(CASE WHEN is_overdue = true THEN 1 ELSE 0 END) as overdue_count FROM serverless_stable_kz434h_catalog.scrap_demo.eight_d_reports_silver WHERE YEAR(date_opened) = YEAR(CURRENT_DATE())"
+      ]
+    },
+    {
+      "name": "root_cause_breakdown",
+      "displayName": "Root Cause Breakdown",
+      "queryLines": [
+        "SELECT root_cause_category FROM serverless_stable_kz434h_catalog.scrap_demo.eight_d_reports_silver WHERE YEAR(date_opened) = YEAR(CURRENT_DATE())"
+      ]
+    },
+    {
+      "name": "eight_d_severity",
+      "displayName": "8D Severity",
+      "queryLines": [
+        "SELECT severity, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM serverless_stable_kz434h_catalog.scrap_demo.eight_d_reports_silver WHERE YEAR(date_opened) = YEAR(CURRENT_DATE()) GROUP BY severity"
+      ]
+    },
+    {
+      "name": "eight_d_effectiveness",
+      "displayName": "8D Effectiveness",
+      "queryLines": [
+        "SELECT verification_result FROM serverless_stable_kz434h_catalog.scrap_demo.eight_d_reports_silver WHERE status = 'Closed' AND YEAR(date_opened) = YEAR(CURRENT_DATE())"
+      ]
+    },
+    {
+      "name": "recent_8d_reports",
+      "displayName": "Recent 8D Reports",
+      "queryLines": [
+        "SELECT report_number, title, severity, status, days_open, plant_name_lookup as plant FROM serverless_stable_kz434h_catalog.scrap_demo.eight_d_reports_silver ORDER BY date_opened DESC LIMIT 15"
+      ]
+    },
+    {
+      "name": "anomaly_summary",
+      "displayName": "Anomaly Summary",
+      "queryLines": [
+        "SELECT * FROM serverless_stable_kz434h_catalog.scrap_demo.scrap_transactions_silver WHERE cost_severity = 'Critical' AND transaction_date >= DATE_ADD(CURRENT_DATE(), -30)"
+      ]
+    },
+    {
+      "name": "anomaly_timeline",
+      "displayName": "Anomaly Timeline",
+      "queryLines": [
+        "SELECT transaction_date, ROUND(SUM(total_scrap_cost), 2) as total_scrap_cost FROM serverless_stable_kz434h_catalog.scrap_demo.scrap_daily_summary_gold WHERE transaction_date >= DATE_ADD(CURRENT_DATE(), -90) GROUP BY transaction_date ORDER BY transaction_date"
+      ]
+    },
+    {
+      "name": "defect_clusters",
+      "displayName": "Defect Clusters",
+      "queryLines": [
+        "SELECT defect_category, ROUND(AVG(total_scrap_cost), 2) as total_scrap_cost, COUNT(*) as record_count FROM serverless_stable_kz434h_catalog.scrap_demo.scrap_transactions_silver WHERE transaction_year = YEAR(CURRENT_DATE()) GROUP BY defect_category"
+      ]
+    },
+    {
+      "name": "recent_anomalies",
+      "displayName": "Recent Anomalies",
+      "queryLines": [
+        "SELECT transaction_date, plant_name_lookup as plant, defect_category, ROUND(total_scrap_cost, 2) as total_scrap_cost, quantity_scrapped FROM serverless_stable_kz434h_catalog.scrap_demo.scrap_transactions_silver WHERE cost_severity = 'Critical' ORDER BY transaction_date DESC LIMIT 20"
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "Executive_Overview",
+      "displayName": "🎯 Executive Overview",
+      "layout": [
+        {
+          "widget": {
+            "name": "header_text",
+            "multilineTextboxSpec": {
+              "lines": [
+                "# 🏭 Scrap Reduction Command Center\n",
+                "\n",
+                "**Real-time intelligence for manufacturing excellence** | *Click any chart to cross-filter*"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 8,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "ytd_scrap_cost",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ytd_kpis",
+                  "fields": [
+                    {
+                      "name": "total_scrap_cost",
+                      "expression": "`total_scrap_cost`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "total_scrap_cost",
+                  "displayName": "YTD Cost"
+                }
+              },
+              "frame": {
+                "title": "💰 YTD Scrap Cost",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 1,
+            "width": 2,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "ytd_qty_scrapped",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ytd_kpis",
+                  "fields": [
+                    {
+                      "name": "total_qty_scrapped",
+                      "expression": "`total_qty_scrapped`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "total_qty_scrapped",
+                  "displayName": "Units"
+                }
+              },
+              "frame": {
+                "title": "📦 Units Scrapped YTD",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 2,
+            "y": 1,
+            "width": 2,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "open_8d_count",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "eight_d_status",
+                  "fields": [
+                    {
+                      "name": "open_count",
+                      "expression": "`open_count`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "open_count",
+                  "displayName": "Open"
+                }
+              },
+              "frame": {
+                "title": "📋 Open 8D Reports",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 1,
+            "width": 2,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "avg_supplier_quality",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "supplier_quality_avg",
+                  "fields": [
+                    {
+                      "name": "avg_quality",
+                      "expression": "`avg_quality`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "avg_quality",
+                  "displayName": "Score %"
+                }
+              },
+              "frame": {
+                "title": "⭐ Avg Supplier Quality",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 1,
+            "width": 2,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "scrap_cost_trend_area",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "monthly_trend",
+                  "fields": [
+                    {
+                      "name": "year_month",
+                      "expression": "`year_month`"
+                    },
+                    {
+                      "name": "total_scrap_cost",
+                      "expression": "`total_scrap_cost`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "area",
+              "encodings": {
+                "x": {
+                  "fieldName": "year_month",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Month"
+                },
+                "y": {
+                  "fieldName": "total_scrap_cost",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Scrap Cost ($)"
+                }
+              },
+              "frame": {
+                "title": "📈 Monthly Scrap Cost Trend",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 3,
+            "width": 5,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "plant_comparison_bar",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "plant_ytd_summary",
+                  "fields": [
+                    {
+                      "name": "total_scrap_cost",
+                      "expression": "`total_scrap_cost`"
+                    },
+                    {
+                      "name": "plant",
+                      "expression": "`plant`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "total_scrap_cost",
+                  "displayName": "Scrap Cost ($)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "plant",
+                  "displayName": "Plant",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "frame": {
+                "title": "🏭 Scrap Cost by Plant",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 5,
+            "y": 3,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "defect_pareto",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "defect_pareto",
+                  "fields": [
+                    {
+                      "name": "total_scrap_cost",
+                      "expression": "`total_scrap_cost`"
+                    },
+                    {
+                      "name": "defect_category",
+                      "expression": "`defect_category`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "total_scrap_cost",
+                  "displayName": "Scrap Cost ($)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "defect_category",
+                  "displayName": "Defect Type",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "frame": {
+                "title": "⚠️ Top Defect Categories (Pareto)",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 6,
+            "width": 4,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "shift_breakdown_pie",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "shift_breakdown",
+                  "fields": [
+                    {
+                      "name": "shift",
+                      "expression": "`shift`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "pie",
+              "encodings": {
+                "color": {
+                  "fieldName": "shift",
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "compact",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 2
+                    }
+                  },
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "label": {
+                  "show": false
+                }
+              },
+              "frame": {
+                "title": "🕐 Scrap by Shift",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 6,
+            "width": 1,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "top_scrap_parts_table",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "top_scrap_parts",
+                  "fields": [
+                    {
+                      "name": "part_id",
+                      "expression": "`part_id`"
+                    },
+                    {
+                      "name": "part_name_lookup",
+                      "expression": "`part_name_lookup`"
+                    },
+                    {
+                      "name": "supplier",
+                      "expression": "`supplier`"
+                    },
+                    {
+                      "name": "plant",
+                      "expression": "`plant`"
+                    },
+                    {
+                      "name": "total_scrap_cost",
+                      "expression": "`total_scrap_cost`"
+                    },
+                    {
+                      "name": "quantity_scrapped",
+                      "expression": "`quantity_scrapped`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "part_id",
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "imageHeight": "",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkOpenInNewTab": true,
+                    "type": "string",
+                    "displayAs": "string",
+                    "visible": true,
+                    "order": 100000,
+                    "title": "part_id",
+                    "allowSearch": false,
+                    "alignContent": "left",
+                    "allowHTML": false,
+                    "highlightLinks": false,
+                    "useMonospaceFont": false,
+                    "preserveWhitespace": false
+                  },
+                  {
+                    "fieldName": "part_name_lookup",
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "imageHeight": "",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkOpenInNewTab": true,
+                    "type": "string",
+                    "displayAs": "string",
+                    "visible": true,
+                    "order": 100001,
+                    "title": "part_name_lookup",
+                    "allowSearch": false,
+                    "alignContent": "left",
+                    "allowHTML": false,
+                    "highlightLinks": false,
+                    "useMonospaceFont": false,
+                    "preserveWhitespace": false
+                  },
+                  {
+                    "fieldName": "supplier",
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "imageHeight": "",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkOpenInNewTab": true,
+                    "type": "string",
+                    "displayAs": "string",
+                    "visible": true,
+                    "order": 100002,
+                    "title": "supplier",
+                    "allowSearch": false,
+                    "alignContent": "left",
+                    "allowHTML": false,
+                    "highlightLinks": false,
+                    "useMonospaceFont": false,
+                    "preserveWhitespace": false
+                  },
+                  {
+                    "fieldName": "plant",
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "imageHeight": "",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkOpenInNewTab": true,
+                    "type": "string",
+                    "displayAs": "string",
+                    "visible": true,
+                    "order": 100003,
+                    "title": "plant",
+                    "allowSearch": false,
+                    "alignContent": "left",
+                    "allowHTML": false,
+                    "highlightLinks": false,
+                    "useMonospaceFont": false,
+                    "preserveWhitespace": false
+                  },
+                  {
+                    "fieldName": "total_scrap_cost",
+                    "numberFormat": "0.00",
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "imageHeight": "",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkOpenInNewTab": true,
+                    "type": "float",
+                    "displayAs": "number",
+                    "visible": true,
+                    "order": 100004,
+                    "title": "total_scrap_cost",
+                    "allowSearch": false,
+                    "alignContent": "right",
+                    "allowHTML": false,
+                    "highlightLinks": false,
+                    "useMonospaceFont": false,
+                    "preserveWhitespace": false
+                  },
+                  {
+                    "fieldName": "quantity_scrapped",
+                    "numberFormat": "0",
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "imageHeight": "",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkOpenInNewTab": true,
+                    "type": "integer",
+                    "displayAs": "number",
+                    "visible": true,
+                    "order": 100005,
+                    "title": "quantity_scrapped",
+                    "allowSearch": false,
+                    "alignContent": "right",
+                    "allowHTML": false,
+                    "highlightLinks": false,
+                    "useMonospaceFont": false,
+                    "preserveWhitespace": false
+                  }
+                ]
+              },
+              "invisibleColumns": [],
+              "allowHTMLByDefault": false,
+              "itemsPerPage": 25,
+              "paginationSize": "default",
+              "condensed": true,
+              "withRowNumber": false,
+              "frame": {
+                "title": "🔥 Top 10 Scrap Parts",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 9,
+            "width": 6,
+            "height": 3
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS"
+    },
+    {
+      "name": "Forecasting_Analytics",
+      "displayName": "🔮 Forecasting & Predictions",
+      "layout": [
+        {
+          "widget": {
+            "name": "forecast_header",
+            "multilineTextboxSpec": {
+              "lines": [
+                "# 🔮 Scrap Cost Forecasting\n",
+                "\n",
+                "**ML-Powered Insights | Trend Analysis | Seasonal Patterns**"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 8,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "forecast_by_plant_line",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "plant_forecast",
+                  "fields": [
+                    {
+                      "name": "year_month",
+                      "expression": "`year_month`"
+                    },
+                    {
+                      "name": "sum(total_scrap_cost)",
+                      "expression": "SUM(`total_scrap_cost`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "year_month",
+                  "displayName": "Month",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(total_scrap_cost)",
+                  "displayName": "Scrap Cost ($)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "frame": {
+                "title": "🏭 Plant Monthly Scrap Trends",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 1,
+            "width": 3,
+            "height": 4
+          }
+        },
+        {
+          "widget": {
+            "name": "forecast_by_supplier_bar",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "supplier_forecast",
+                  "fields": [
+                    {
+                      "name": "total_scrap_cost",
+                      "expression": "`total_scrap_cost`"
+                    },
+                    {
+                      "name": "supplier",
+                      "expression": "`supplier`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "total_scrap_cost",
+                  "displayName": "Scrap Cost ($)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "supplier",
+                  "displayName": "Supplier",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "frame": {
+                "title": "🏢 Top Suppliers by Scrap Cost",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 1,
+            "width": 5,
+            "height": 4
+          }
+        },
+        {
+          "widget": {
+            "name": "seasonality_heatmap",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "seasonal_patterns",
+                  "fields": [
+                    {
+                      "name": "month_num",
+                      "expression": "`transaction_month`"
+                    },
+                    {
+                      "name": "day_of_week",
+                      "expression": "`day_name`"
+                    },
+                    {
+                      "name": "avg_scrap_cost",
+                      "expression": "`total_scrap_cost`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "heatmap",
+              "encodings": {
+                "x": {
+                  "fieldName": "day_of_week",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Day"
+                },
+                "y": {
+                  "fieldName": "month_num",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "Month"
+                },
+                "color": {
+                  "fieldName": "avg_scrap_cost",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Avg Cost"
+                }
+              },
+              "frame": {
+                "title": "🌡️ Seasonal Scrap Patterns",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 5,
+            "width": 4,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "prediction_drivers",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "feature_importance",
+                  "fields": [
+                    {
+                      "name": "total_scrap_cost",
+                      "expression": "`total_scrap_cost`"
+                    },
+                    {
+                      "name": "defect_category",
+                      "expression": "`defect_category`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "total_scrap_cost",
+                  "displayName": "Scrap Cost",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "defect_category",
+                  "displayName": "Defect Category",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "frame": {
+                "title": "🎯 Key Scrap Drivers by Defect",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 5,
+            "width": 4,
+            "height": 3
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS"
+    },
+    {
+      "name": "Supplier_Intelligence",
+      "displayName": "🏢 Supplier Intelligence",
+      "layout": [
+        {
+          "widget": {
+            "name": "supplier_header",
+            "multilineTextboxSpec": {
+              "lines": [
+                "# 🏢 Supplier Quality Intelligence\n",
+                "\n",
+                "**Risk Scoring | Quality Correlation | Performance Tracking**"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 8,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "high_risk_suppliers",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "supplier_risk",
+                  "fields": [
+                    {
+                      "name": "count(*)",
+                      "expression": "COUNT(`*`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "count(*)",
+                  "displayName": "Count"
+                }
+              },
+              "frame": {
+                "title": "🔴 Low Quality Suppliers (<85%)",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 1,
+            "width": 2,
+            "height": 4
+          }
+        },
+        {
+          "widget": {
+            "name": "supplier_quality_vs_scrap",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "supplier_quality_scrap",
+                  "fields": [
+                    {
+                      "name": "supplier_name",
+                      "expression": "`supplier`"
+                    },
+                    {
+                      "name": "quality_score",
+                      "expression": "`supplier_quality_score`"
+                    },
+                    {
+                      "name": "scrap_cost",
+                      "expression": "`total_scrap_cost`"
+                    },
+                    {
+                      "name": "tier",
+                      "expression": "`supplier_tier_lookup`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "scatter",
+              "encodings": {
+                "x": {
+                  "fieldName": "quality_score",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Quality Score"
+                },
+                "y": {
+                  "fieldName": "scrap_cost",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Scrap Cost ($)"
+                },
+                "color": {
+                  "fieldName": "tier",
+                  "displayName": "Tier"
+                },
+                "size": {
+                  "fieldName": "scrap_cost",
+                  "displayName": "Cost"
+                }
+              },
+              "frame": {
+                "title": "📊 Quality Score vs Scrap Cost",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 2,
+            "y": 1,
+            "width": 4,
+            "height": 4
+          }
+        },
+        {
+          "widget": {
+            "name": "supplier_tier_breakdown",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "supplier_tier_scrap",
+                  "fields": [
+                    {
+                      "name": "supplier_tier_lookup",
+                      "expression": "`supplier_tier_lookup`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "pie",
+              "encodings": {
+                "color": {
+                  "fieldName": "supplier_tier_lookup",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "frame": {
+                "title": "🥧 Scrap by Supplier Tier",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 1,
+            "width": 2,
+            "height": 4
+          }
+        },
+        {
+          "widget": {
+            "name": "supplier_scorecard_table",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "supplier_scorecard",
+                  "fields": [
+                    {
+                      "name": "supplier",
+                      "expression": "`supplier`"
+                    },
+                    {
+                      "name": "supplier_tier_lookup",
+                      "expression": "`supplier_tier_lookup`"
+                    },
+                    {
+                      "name": "supplier_quality_score",
+                      "expression": "`supplier_quality_score`"
+                    },
+                    {
+                      "name": "total_scrap_cost",
+                      "expression": "`total_scrap_cost`"
+                    },
+                    {
+                      "name": "parts_affected",
+                      "expression": "`parts_affected`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "supplier",
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "imageHeight": "",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkOpenInNewTab": true,
+                    "type": "string",
+                    "displayAs": "string",
+                    "visible": true,
+                    "order": 100000,
+                    "title": "supplier",
+                    "allowSearch": false,
+                    "alignContent": "left",
+                    "allowHTML": false,
+                    "highlightLinks": false,
+                    "useMonospaceFont": false,
+                    "preserveWhitespace": false
+                  },
+                  {
+                    "fieldName": "supplier_tier_lookup",
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "imageHeight": "",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkOpenInNewTab": true,
+                    "type": "string",
+                    "displayAs": "string",
+                    "visible": true,
+                    "order": 100001,
+                    "title": "supplier_tier_lookup",
+                    "allowSearch": false,
+                    "alignContent": "left",
+                    "allowHTML": false,
+                    "highlightLinks": false,
+                    "useMonospaceFont": false,
+                    "preserveWhitespace": false
+                  },
+                  {
+                    "fieldName": "supplier_quality_score",
+                    "numberFormat": "0.00",
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "imageHeight": "",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkOpenInNewTab": true,
+                    "type": "float",
+                    "displayAs": "number",
+                    "visible": true,
+                    "order": 100002,
+                    "title": "supplier_quality_score",
+                    "allowSearch": false,
+                    "alignContent": "right",
+                    "allowHTML": false,
+                    "highlightLinks": false,
+                    "useMonospaceFont": false,
+                    "preserveWhitespace": false
+                  },
+                  {
+                    "fieldName": "total_scrap_cost",
+                    "numberFormat": "0.00",
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "imageHeight": "",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkOpenInNewTab": true,
+                    "type": "float",
+                    "displayAs": "number",
+                    "visible": true,
+                    "order": 100003,
+                    "title": "total_scrap_cost",
+                    "allowSearch": false,
+                    "alignContent": "right",
+                    "allowHTML": false,
+                    "highlightLinks": false,
+                    "useMonospaceFont": false,
+                    "preserveWhitespace": false
+                  },
+                  {
+                    "fieldName": "parts_affected",
+                    "numberFormat": "0",
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "imageHeight": "",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkOpenInNewTab": true,
+                    "type": "integer",
+                    "displayAs": "number",
+                    "visible": true,
+                    "order": 100004,
+                    "title": "parts_affected",
+                    "allowSearch": false,
+                    "alignContent": "right",
+                    "allowHTML": false,
+                    "highlightLinks": false,
+                    "useMonospaceFont": false,
+                    "preserveWhitespace": false
+                  }
+                ]
+              },
+              "invisibleColumns": [],
+              "allowHTMLByDefault": false,
+              "itemsPerPage": 25,
+              "paginationSize": "default",
+              "condensed": true,
+              "withRowNumber": false,
+              "frame": {
+                "title": "📋 Supplier Scorecard",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 9,
+            "width": 6,
+            "height": 4
+          }
+        },
+        {
+          "widget": {
+            "name": "supplier_trend",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "supplier_monthly_trend",
+                  "fields": [
+                    {
+                      "name": "year_month",
+                      "expression": "`year_month`"
+                    },
+                    {
+                      "name": "total_scrap_cost",
+                      "expression": "`total_scrap_cost`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "year_month",
+                  "displayName": "Month",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "total_scrap_cost",
+                  "displayName": "Scrap Cost ($)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "frame": {
+                "title": "📈 Top Supplier Scrap Trends",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 5,
+            "width": 6,
+            "height": 4
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS"
+    },
+    {
+      "name": "Plant_Operations",
+      "displayName": "🏭 Plant Operations",
+      "layout": [
+        {
+          "widget": {
+            "name": "plant_header",
+            "multilineTextboxSpec": {
+              "lines": [
+                "# 🏭 Plant Operations Deep Dive\n",
+                "\n",
+                "**Work Center Analysis | Equipment Correlation | Shift Patterns**"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 8,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "plant_comparison_hbar",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "plant_performance",
+                  "fields": [
+                    {
+                      "name": "sum(total_scrap_cost)",
+                      "expression": "SUM(`total_scrap_cost`)"
+                    },
+                    {
+                      "name": "plant",
+                      "expression": "`plant`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "sum(total_scrap_cost)",
+                  "displayName": "Scrap Cost ($)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "plant",
+                  "displayName": "Plant",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "frame": {
+                "title": "🏭 Plant Scrap Cost Comparison",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 1,
+            "width": 4,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "work_center_scrap",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "work_center_scrap",
+                  "fields": [
+                    {
+                      "name": "total_scrap_cost",
+                      "expression": "`total_scrap_cost`"
+                    },
+                    {
+                      "name": "work_center_type_lookup",
+                      "expression": "`work_center_type_lookup`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "total_scrap_cost",
+                  "displayName": "Scrap Cost ($)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "work_center_type_lookup",
+                  "displayName": "Work Center",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "frame": {
+                "title": "🔧 Scrap by Work Center Type",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 1,
+            "width": 4,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "shift_plant_heatmap",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "shift_plant_matrix",
+                  "fields": [
+                    {
+                      "name": "total_scrap_cost",
+                      "expression": "`total_scrap_cost`"
+                    },
+                    {
+                      "name": "plant",
+                      "expression": "`plant`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "heatmap",
+              "encodings": {
+                "y": {
+                  "fieldName": "plant",
+                  "displayName": "Plant",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "color": {
+                  "fieldName": "total_scrap_cost",
+                  "displayName": "Scrap Cost",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "frame": {
+                "title": "🗓️ Plant × Shift Scrap Heatmap",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 4,
+            "width": 4,
+            "height": 4
+          }
+        },
+        {
+          "widget": {
+            "name": "plant_monthly_trend",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "plant_monthly",
+                  "fields": [
+                    {
+                      "name": "year_month",
+                      "expression": "`year_month`"
+                    },
+                    {
+                      "name": "total_scrap_cost",
+                      "expression": "`total_scrap_cost`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "year_month",
+                  "displayName": "Month",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "total_scrap_cost",
+                  "displayName": "Scrap Cost ($)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "frame": {
+                "title": "📈 Plant Monthly Trends",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 4,
+            "width": 4,
+            "height": 4
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS"
+    },
+    {
+      "name": "Quality_8D_Analysis",
+      "displayName": "📋 8D & Quality",
+      "layout": [
+        {
+          "widget": {
+            "name": "quality_header",
+            "multilineTextboxSpec": {
+              "lines": [
+                "# 📋 8D Quality Report Analysis\n",
+                "\n",
+                "**Root Cause Insights | Closure Metrics | Effectiveness Tracking**"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 8,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "total_8d_opened",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "eight_d_summary",
+                  "fields": [
+                    {
+                      "name": "count(*)",
+                      "expression": "COUNT(`*`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "count(*)",
+                  "displayName": "Reports"
+                }
+              },
+              "frame": {
+                "title": "📝 Total 8D Reports YTD",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 1,
+            "width": 2,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "closure_rate",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "eight_d_closure_rate",
+                  "fields": [
+                    {
+                      "name": "closure_rate",
+                      "expression": "`closure_rate`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "closure_rate",
+                  "displayName": "Rate %"
+                }
+              },
+              "frame": {
+                "title": "✅ 8D Closure Rate",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 2,
+            "y": 1,
+            "width": 2,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "avg_days_to_close",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "eight_d_timing",
+                  "fields": [
+                    {
+                      "name": "avg_days",
+                      "expression": "`avg_days`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "avg_days",
+                  "displayName": "Days"
+                }
+              },
+              "frame": {
+                "title": "⏱️ Avg Days to Close",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 1,
+            "width": 2,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "overdue_count",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "eight_d_overdue",
+                  "fields": [
+                    {
+                      "name": "overdue_count",
+                      "expression": "`overdue_count`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "overdue_count",
+                  "displayName": "Count"
+                }
+              },
+              "frame": {
+                "title": "🔴 Overdue 8Ds",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 1,
+            "width": 2,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "root_cause_pareto",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "root_cause_breakdown",
+                  "fields": [
+                    {
+                      "name": "count(*)",
+                      "expression": "COUNT(`*`)"
+                    },
+                    {
+                      "name": "root_cause_category",
+                      "expression": "`root_cause_category`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "count(*)",
+                  "displayName": "Count",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "root_cause_category",
+                  "displayName": "Root Cause",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "frame": {
+                "title": "🎯 Root Cause Categories (4M)",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 3,
+            "width": 4,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "severity_breakdown",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "eight_d_severity",
+                  "fields": [
+                    {
+                      "name": "severity",
+                      "expression": "`severity`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "pie",
+              "encodings": {
+                "color": {
+                  "fieldName": "severity",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "label": {
+                  "show": false
+                }
+              },
+              "frame": {
+                "title": "⚠️ 8D by Severity",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 3,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "effectiveness_rate",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "eight_d_effectiveness",
+                  "fields": [
+                    {
+                      "name": "verification_result",
+                      "expression": "`verification_result`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "pie",
+              "encodings": {
+                "color": {
+                  "fieldName": "verification_result",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "frame": {
+                "title": "✓ Verification Effectiveness",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 3,
+            "width": 2,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "eight_d_recent_table",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "recent_8d_reports",
+                  "fields": [
+                    {
+                      "name": "report_number",
+                      "expression": "`report_number`"
+                    },
+                    {
+                      "name": "title",
+                      "expression": "`title`"
+                    },
+                    {
+                      "name": "severity",
+                      "expression": "`severity`"
+                    },
+                    {
+                      "name": "status",
+                      "expression": "`status`"
+                    },
+                    {
+                      "name": "days_open",
+                      "expression": "`days_open`"
+                    },
+                    {
+                      "name": "plant",
+                      "expression": "`plant`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "report_number",
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "imageHeight": "",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkOpenInNewTab": true,
+                    "type": "string",
+                    "displayAs": "string",
+                    "visible": true,
+                    "order": 100000,
+                    "title": "report_number",
+                    "allowSearch": false,
+                    "alignContent": "left",
+                    "allowHTML": false,
+                    "highlightLinks": false,
+                    "useMonospaceFont": false,
+                    "preserveWhitespace": false
+                  },
+                  {
+                    "fieldName": "title",
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "imageHeight": "",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkOpenInNewTab": true,
+                    "type": "string",
+                    "displayAs": "string",
+                    "visible": true,
+                    "order": 100001,
+                    "title": "title",
+                    "allowSearch": false,
+                    "alignContent": "left",
+                    "allowHTML": false,
+                    "highlightLinks": false,
+                    "useMonospaceFont": false,
+                    "preserveWhitespace": false
+                  },
+                  {
+                    "fieldName": "severity",
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "imageHeight": "",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkOpenInNewTab": true,
+                    "type": "string",
+                    "displayAs": "string",
+                    "visible": true,
+                    "order": 100002,
+                    "title": "severity",
+                    "allowSearch": false,
+                    "alignContent": "left",
+                    "allowHTML": false,
+                    "highlightLinks": false,
+                    "useMonospaceFont": false,
+                    "preserveWhitespace": false
+                  },
+                  {
+                    "fieldName": "status",
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "imageHeight": "",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkOpenInNewTab": true,
+                    "type": "string",
+                    "displayAs": "string",
+                    "visible": true,
+                    "order": 100003,
+                    "title": "status",
+                    "allowSearch": false,
+                    "alignContent": "left",
+                    "allowHTML": false,
+                    "highlightLinks": false,
+                    "useMonospaceFont": false,
+                    "preserveWhitespace": false
+                  },
+                  {
+                    "fieldName": "days_open",
+                    "numberFormat": "0",
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "imageHeight": "",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkOpenInNewTab": true,
+                    "type": "integer",
+                    "displayAs": "number",
+                    "visible": true,
+                    "order": 100004,
+                    "title": "days_open",
+                    "allowSearch": false,
+                    "alignContent": "right",
+                    "allowHTML": false,
+                    "highlightLinks": false,
+                    "useMonospaceFont": false,
+                    "preserveWhitespace": false
+                  },
+                  {
+                    "fieldName": "plant",
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "imageHeight": "",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkOpenInNewTab": true,
+                    "type": "string",
+                    "displayAs": "string",
+                    "visible": true,
+                    "order": 100005,
+                    "title": "plant",
+                    "allowSearch": false,
+                    "alignContent": "left",
+                    "allowHTML": false,
+                    "highlightLinks": false,
+                    "useMonospaceFont": false,
+                    "preserveWhitespace": false
+                  }
+                ]
+              },
+              "invisibleColumns": [],
+              "allowHTMLByDefault": false,
+              "itemsPerPage": 25,
+              "paginationSize": "default",
+              "condensed": true,
+              "withRowNumber": false,
+              "frame": {
+                "title": "📋 Recent 8D Reports",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 6,
+            "width": 6,
+            "height": 3
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS"
+    },
+    {
+      "name": "ML_Anomalies",
+      "displayName": "🤖 ML Anomalies",
+      "layout": [
+        {
+          "widget": {
+            "name": "ml_header",
+            "multilineTextboxSpec": {
+              "lines": [
+                "# 🤖 ML-Powered Anomaly Detection\n",
+                "\n",
+                "**Real-time Anomaly Alerts | Pattern Recognition | Predictive Insights**"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 8,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "anomaly_count_today",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "anomaly_summary",
+                  "fields": [
+                    {
+                      "name": "count(*)",
+                      "expression": "COUNT(`*`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "count(*)",
+                  "displayName": "Count"
+                }
+              },
+              "frame": {
+                "title": "🚨 Critical Scrap Incidents (30d)",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 1,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "anomaly_timeline",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "anomaly_timeline",
+                  "fields": [
+                    {
+                      "name": "transaction_date",
+                      "expression": "`transaction_date`"
+                    },
+                    {
+                      "name": "actual_cost",
+                      "expression": "`total_scrap_cost`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "transaction_date",
+                  "scale": {
+                    "type": "temporal"
+                  },
+                  "displayName": "Date"
+                },
+                "y": {
+                  "fieldName": "actual_cost",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Daily Scrap Cost ($)"
+                }
+              },
+              "frame": {
+                "title": "📉 Daily Scrap Cost (Last 90 Days)",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 1,
+            "width": 5,
+            "height": 4
+          }
+        },
+        {
+          "widget": {
+            "name": "defect_clusters",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "defect_clusters",
+                  "fields": [
+                    {
+                      "name": "total_scrap_cost",
+                      "expression": "`total_scrap_cost`"
+                    },
+                    {
+                      "name": "record_count",
+                      "expression": "`record_count`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "scatter",
+              "encodings": {
+                "x": {
+                  "fieldName": "total_scrap_cost",
+                  "displayName": "Avg Cost ($)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "record_count",
+                  "displayName": "Record Count",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "frame": {
+                "title": "🎯 Defect Category Analysis",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 5,
+            "width": 3,
+            "height": 4
+          }
+        },
+        {
+          "widget": {
+            "name": "recent_anomalies_table",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "recent_anomalies",
+                  "fields": [
+                    {
+                      "name": "transaction_date",
+                      "expression": "`transaction_date`"
+                    },
+                    {
+                      "name": "plant",
+                      "expression": "`plant`"
+                    },
+                    {
+                      "name": "defect_category",
+                      "expression": "`defect_category`"
+                    },
+                    {
+                      "name": "total_scrap_cost",
+                      "expression": "`total_scrap_cost`"
+                    },
+                    {
+                      "name": "quantity_scrapped",
+                      "expression": "`quantity_scrapped`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "transaction_date",
+                    "dateTimeFormat": "DD/MM/YYYY",
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "imageHeight": "",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkOpenInNewTab": true,
+                    "type": "date",
+                    "displayAs": "datetime",
+                    "visible": true,
+                    "order": 100000,
+                    "title": "transaction_date",
+                    "allowSearch": false,
+                    "alignContent": "right",
+                    "allowHTML": false,
+                    "highlightLinks": false,
+                    "useMonospaceFont": false,
+                    "preserveWhitespace": false
+                  },
+                  {
+                    "fieldName": "plant",
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "imageHeight": "",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkOpenInNewTab": true,
+                    "type": "string",
+                    "displayAs": "string",
+                    "visible": true,
+                    "order": 100001,
+                    "title": "plant",
+                    "allowSearch": false,
+                    "alignContent": "left",
+                    "allowHTML": false,
+                    "highlightLinks": false,
+                    "useMonospaceFont": false,
+                    "preserveWhitespace": false
+                  },
+                  {
+                    "fieldName": "defect_category",
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "imageHeight": "",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkOpenInNewTab": true,
+                    "type": "string",
+                    "displayAs": "string",
+                    "visible": true,
+                    "order": 100002,
+                    "title": "defect_category",
+                    "allowSearch": false,
+                    "alignContent": "left",
+                    "allowHTML": false,
+                    "highlightLinks": false,
+                    "useMonospaceFont": false,
+                    "preserveWhitespace": false
+                  },
+                  {
+                    "fieldName": "total_scrap_cost",
+                    "numberFormat": "0.00",
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "imageHeight": "",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkOpenInNewTab": true,
+                    "type": "float",
+                    "displayAs": "number",
+                    "visible": true,
+                    "order": 100003,
+                    "title": "total_scrap_cost",
+                    "allowSearch": false,
+                    "alignContent": "right",
+                    "allowHTML": false,
+                    "highlightLinks": false,
+                    "useMonospaceFont": false,
+                    "preserveWhitespace": false
+                  },
+                  {
+                    "fieldName": "quantity_scrapped",
+                    "numberFormat": "0",
+                    "booleanValues": [
+                      "false",
+                      "true"
+                    ],
+                    "imageUrlTemplate": "{{ @ }}",
+                    "imageTitleTemplate": "{{ @ }}",
+                    "imageWidth": "",
+                    "imageHeight": "",
+                    "linkUrlTemplate": "{{ @ }}",
+                    "linkTextTemplate": "{{ @ }}",
+                    "linkTitleTemplate": "{{ @ }}",
+                    "linkOpenInNewTab": true,
+                    "type": "integer",
+                    "displayAs": "number",
+                    "visible": true,
+                    "order": 100004,
+                    "title": "quantity_scrapped",
+                    "allowSearch": false,
+                    "alignContent": "right",
+                    "allowHTML": false,
+                    "highlightLinks": false,
+                    "useMonospaceFont": false,
+                    "preserveWhitespace": false
+                  }
+                ]
+              },
+              "invisibleColumns": [],
+              "allowHTMLByDefault": false,
+              "itemsPerPage": 25,
+              "paginationSize": "default",
+              "condensed": true,
+              "withRowNumber": false,
+              "frame": {
+                "title": "🚨 Recent High-Cost Scrap Events",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 3,
+            "width": 3,
+            "height": 6
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS"
+    },
+    {
+      "name": "c8921488",
+      "displayName": "Global Filters",
+      "layout": [
+        {
+          "widget": {
+            "name": "7225a0e6",
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-single-select",
+              "encodings": {},
+              "frame": {
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 1,
+            "height": 2
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_GLOBAL_FILTERS"
+    }
+  ]
+}
